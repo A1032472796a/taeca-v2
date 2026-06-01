@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#080c10"/>
+  <title>Taseca · Barber & Tattoo Studio</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{background:#080c10;font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden}
+    #root{max-width:430px;margin:0 auto;min-height:100vh}
+    input,select,button{font-family:inherit}
+    input:focus,select:focus{outline:1px solid #c9a84c}
+    select option{background:#1a2230;color:#f0f0f0}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+
+const {useState,useRef,useMemo,useEffect} = React;
+
+// ─── SHEETS URL ───────────────────────────────────────────────────
+const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxbFtP0BLlxuHsJs4Du0EgpRuqPYCMM_CyoaFUsiF8XXWSZVUu20rxwE-q39eWFELqD/exec";
+
+const syncSheets = (type, action, payload) => {
+  fetch(SHEETS_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({type,action,payload}),mode:"no-cors"}).catch(()=>{});
+};
+
+// ─── LOCALSTORAGE ────────────────────────────────────────────────
+const load = (key, def) => { try{ const v=localStorage.getItem("taseca_"+key); return v?JSON.parse(v):def; }catch(e){return def;} };
+const save = (key, val) => { try{ localStorage.setItem("taseca_"+key,JSON.stringify(val)); }catch(e){} };
+
+// ─── DATOS ───────────────────────────────────────────────────────
+const DEF_USERS = [
+  {id:1,name:"Juan Barbero",role:"barbero",pin:"1234",photo:null,workDays:[1,2,3,4,5],blockedSlots:{}},
+  {id:2,name:"María Tatuadora",role:"tatuador",pin:"5678",photo:null,workDays:[2,3,4,5,6],blockedSlots:{}},
+  {id:3,name:"Admin",role:"admin",pin:"0000",photo:null,workDays:[1,2,3,4,5,6],blockedSlots:{}},
+];
+const DEF_SERVICES = [
+  {id:1,name:"Corte clásico",category:"barberia",price:15,duration:30},
+  {id:2,name:"Barba y perfilado",category:"barberia",price:12,duration:25},
+  {id:3,name:"Tatuaje pequeño",category:"tatuaje",price:80,duration:60},
+  {id:4,name:"Tatuaje mediano",category:"tatuaje",price:150,duration:120},
+];
+const DEF_PRODUCTS = [
+  {id:1,name:"Pomada fijadora",stock:20,price:10},
+  {id:2,name:"Aceite para barba",stock:15,price:14},
+  {id:3,name:"Tinta negra",stock:8,price:25},
+];
+const DEF_CLIENTS = [
+  {id:1,name:"Carlos Méndez",phone:"0981-234567",visits:5,lastVisit:"2026-05-20"},
+];
+const DEF_APPOINTMENTS = [];
+const DEF_SALES = [];
+
+const ROLES = {admin:"Administrador",barbero:"Barbero",tatuador:"Tatuador/a",recepcionista:"Recepcionista"};
+const ROLE_TABS = {admin:["agenda","clientes","catalogo","caja","config"],barbero:["agenda","clientes","catalogo"],tatuador:["agenda","clientes","catalogo"],recepcionista:["agenda","clientes"]};
+const STATUS_C = {confirmado:"#2ecc71",pendiente:"#f39c12",cancelado:"#e74c3c"};
+const CAT_C = {barberia:"#3498db",tatuaje:"#8e44ad"};
+const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const DAYS = ["Do","Lu","Ma","Mi","Ju","Vi","Sa"];
+const MORNING = ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30"];
+const AFTERNOON = ["14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30"];
+
+// ─── COLORES ──────────────────────────────────────────────────────
+const C = {bg:"#080c10",card:"#111820",accent:"#c9a84c",cyan:"#4ecdc4",text:"#f0f0f0",muted:"#6a7a8a",border:"#1e2a35",success:"#2ecc71",danger:"#e74c3c"};
+
+// ─── ESTILOS BASE ─────────────────────────────────────────────────
+const S = {
+  app:{background:"linear-gradient(160deg,#080c10 0%,#0d1520 100%)",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:"'Segoe UI',sans-serif",color:C.text},
+  card:{background:C.card,borderRadius:14,padding:"13px 15px",marginBottom:11,border:`1px solid ${C.border}`},
+  input:{width:"100%",background:"#1a2230",border:`1px solid ${C.border}`,borderRadius:11,padding:"11px 13px",color:C.text,fontSize:14,boxSizing:"border-box",outline:"none",display:"block"},
+  label:{fontSize:12,color:C.muted,marginBottom:5,display:"block"},
+  row:{display:"flex",justifyContent:"space-between",alignItems:"center"},
+  badge:(col)=>({background:col+"22",color:col,fontSize:11,padding:"2px 9px",borderRadius:20,fontWeight:600}),
+  btn:(v="gold")=>({
+    background:v==="gold"?C.accent:v==="cyan"?C.cyan:v==="danger"?C.danger:v==="ghost"?"transparent":C.border,
+    color:v==="ghost"?C.muted:"#000",
+    border:v==="ghost"?`1px solid ${C.border}`:"none",
+    borderRadius:11,padding:"10px 16px",cursor:"pointer",fontWeight:700,fontSize:14,
+  }),
+  overlay:{position:"fixed",inset:0,background:"#000c",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"},
+  modalBox:{background:C.card,borderRadius:"20px 20px 0 0",padding:"22px 18px 36px",width:"100%",maxWidth:430,maxHeight:"88vh",overflowY:"auto"},
+};
+
+// ─── LOGO TASECA ──────────────────────────────────────────────────
+function Logo({size=60}){
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <defs>
+        <linearGradient id="lg" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#c9a84c"/><stop offset="100%" stopColor="#4ecdc4"/>
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="45" r="36" stroke="#4ecdc4" strokeWidth="0.8" strokeDasharray="3 3" fill="none" opacity="0.5"/>
+      <polygon points="50,8 88,78 12,78" stroke="url(#lg)" strokeWidth="2.5" fill="none"/>
+      <ellipse cx="50" cy="50" rx="13" ry="8" stroke="url(#lg)" strokeWidth="1.8" fill="#080c10"/>
+      <circle cx="50" cy="50" r="4.5" fill="url(#lg)"/>
+      <circle cx="50" cy="50" r="2" fill="#000"/>
+      <rect x="40" y="64" width="3" height="7" fill="url(#lg)" rx="1"/>
+      <rect x="45" y="61" width="3" height="10" fill="url(#lg)" rx="1"/>
+      <rect x="50" y="58" width="3" height="13" fill="url(#lg)" rx="1"/>
+      <rect x="55" y="61" width="3" height="10" fill="url(#lg)" rx="1"/>
+      <rect x="60" y="64" width="3" height="7" fill="url(#lg)" rx="1"/>
+      <circle cx="50" cy="8" r="2" fill="#4ecdc4"/>
+      <circle cx="88" cy="78" r="2" fill="#4ecdc4"/>
+      <circle cx="12" cy="78" r="2" fill="#4ecdc4"/>
+    </svg>
+  );
+}
+
+// ─── CAMPO DE FORMULARIO ──────────────────────────────────────────
+function Field({label, value, onChange, type="text", options, placeholder}){
+  return (
+    <div style={{marginBottom:12}}>
+      <label style={S.label}>{label}</label>
+      {options ? (
+        <select style={S.input} value={value||""} onChange={e=>onChange(e.target.value)}>
+          <option value="">Seleccionar...</option>
+          {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
+      ) : (
+        <input
+          style={S.input}
+          type={type}
+          placeholder={placeholder}
+          value={value||""}
+          onChange={e=>onChange(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── MODAL BASE ───────────────────────────────────────────────────
+function Modal({title, onClose, onSave, children}){
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modalBox} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.key==="Enter"&&e.stopPropagation()}>
+        <div style={{...S.row,marginBottom:16}}>
+          <div style={{fontSize:17,fontWeight:800,color:C.accent}}>{title}</div>
+          <button type="button" onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+        {children}
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={onClose}>Cancelar</button>
+          <button type="button" style={{...S.btn(),flex:2}} onClick={onSave}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HELPERS CALENDARIO ───────────────────────────────────────────
+const toStr = d => d.toISOString().slice(0,10);
+const todayStr = () => toStr(new Date());
+
+function calDays(year, month){
+  const days=[], first=new Date(year,month,1), last=new Date(year,month+1,0);
+  for(let i=0;i<first.getDay();i++) days.push(null);
+  for(let d=1;d<=last.getDate();d++) days.push(new Date(year,month,d));
+  return days;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VISTA PÚBLICA — AGENDAMIENTO
+// ═══════════════════════════════════════════════════════════════════
+function PublicView({services, appointments, users, onBook, onGoAdmin}){
+  const [step,setStep] = useState(1);
+  const [svc,setSvc] = useState(null);
+  const [staff,setStaff] = useState(null);
+  const [date,setDate] = useState(null);
+  const [time,setTime] = useState(null);
+  const [name,setName] = useState("");
+  const [phone,setPhone] = useState("");
+  const [err,setErr] = useState("");
+  const [yr,setYr] = useState(new Date().getFullYear());
+  const [mo,setMo] = useState(new Date().getMonth());
+
+  const staffList = users.filter(u=>u.role==="barbero"||u.role==="tatuador");
+
+  const dayStatus = (d) => {
+    if(!staff) return "na";
+    const ds=toStr(d), ts=todayStr();
+    if(ds<ts) return "past";
+    if(!staff.workDays.includes(d.getDay())) return "off";
+    const bl=staff.blockedSlots[ds]||[];
+    const taken=appointments.filter(a=>a.staffId===staff.id&&a.date===ds).map(a=>a.time);
+    const mFull=bl.includes("morning")||MORNING.every(h=>taken.includes(h));
+    const aFull=bl.includes("afternoon")||AFTERNOON.every(h=>taken.includes(h));
+    return (mFull&&aFull)?"full":"avail";
+  };
+
+  const times = useMemo(()=>{
+    if(!staff||!date) return {m:[],a:[]};
+    const ds=toStr(date), bl=staff.blockedSlots[ds]||[];
+    const taken=appointments.filter(a=>a.staffId===staff.id&&a.date===ds).map(a=>a.time);
+    return {
+      m: bl.includes("morning")?[]:MORNING.filter(h=>!taken.includes(h)),
+      a: bl.includes("afternoon")?[]:AFTERNOON.filter(h=>!taken.includes(h)),
+    };
+  },[staff,date,appointments]);
+
+  const confirm = () => {
+    if(!name||!phone){setErr("Completa tu nombre y teléfono");return;}
+    const appt={id:Date.now(),clientName:name,service:svc.name,staffId:staff.id,date:toStr(date),time,status:"pendiente"};
+    onBook(appt);
+    syncSheets("cita","add",appt);
+    setStep(5);
+  };
+
+  const days = calDays(yr,mo);
+
+  const DC = {avail:C.card,off:"#080c10",full:"#1a0808",past:"#080c10",na:"#080c10"};
+  const DTC = {avail:C.text,off:C.border,full:C.danger+"66",past:C.border,na:C.border};
+
+  return (
+    <div style={S.app}>
+      {/* HERO */}
+      <div style={{background:"linear-gradient(160deg,#080c10,#0d1a28,#0a1a15)",padding:"36px 24px 24px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Logo size={70}/></div>
+        <div style={{fontSize:28,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:4}}>TASECA</div>
+        <div style={{fontSize:11,color:C.cyan,letterSpacing:3,marginBottom:4}}>BARBER & TATTOO STUDIO</div>
+        <div style={{fontSize:13,color:C.muted}}>Agenda tu cita fácil y rápido</div>
+      </div>
+
+      <div style={{padding:"18px 15px 100px"}}>
+        {/* BARRA DE PASOS */}
+        {step<5&&<div style={{display:"flex",gap:5,marginBottom:18}}>{[1,2,3,4].map(i=><div key={i} style={{flex:1,height:4,borderRadius:4,background:step>i?C.accent:step===i?C.accent+"66":C.border}}/>)}</div>}
+
+        {/* PASO 1: SERVICIO */}
+        {step===1&&<>
+          <div style={{fontWeight:700,fontSize:17,color:C.accent,marginBottom:14}}>¿Qué servicio necesitas?</div>
+          {services.map(sv=>(
+            <div key={sv.id} onClick={()=>setSvc(sv)} style={{background:svc?.id===sv.id?C.accent+"18":C.card,border:`1.5px solid ${svc?.id===sv.id?C.accent:C.border}`,borderRadius:14,padding:"13px 14px",marginBottom:9,cursor:"pointer"}}>
+              <div style={S.row}>
+                <div>
+                  <div style={{fontWeight:700}}>{sv.name}</div>
+                  <div style={{color:C.muted,fontSize:13,marginTop:2}}>⏱ {sv.duration} min · <span style={S.badge(CAT_C[sv.category]||C.muted)}>{sv.category}</span></div>
+                </div>
+                <div style={{color:C.accent,fontWeight:900,fontSize:17}}>${sv.price}</div>
+              </div>
+            </div>
+          ))}
+          <button type="button" style={{...S.btn(),width:"100%",marginTop:8,opacity:svc?1:0.4}} disabled={!svc} onClick={()=>setStep(2)}>Continuar →</button>
+        </>}
+
+        {/* PASO 2: PROFESIONAL */}
+        {step===2&&<>
+          <div style={{fontWeight:700,fontSize:17,color:C.accent,marginBottom:4}}>Elige tu profesional</div>
+          <div style={{color:C.muted,fontSize:13,marginBottom:14}}>Servicio: <b style={{color:C.text}}>{svc?.name}</b></div>
+          {staffList.map(u=>(
+            <div key={u.id} onClick={()=>{setStaff(u);setDate(null);setTime(null);}} style={{background:staff?.id===u.id?C.cyan+"18":C.card,border:`1.5px solid ${staff?.id===u.id?C.cyan:C.border}`,borderRadius:14,padding:"12px 14px",marginBottom:9,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:42,height:42,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+                {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:u.name[0]}
+              </div>
+              <div><div style={{fontWeight:700}}>{u.name}</div><div style={{color:C.muted,fontSize:13}}>{ROLES[u.role]}</div></div>
+              {staff?.id===u.id&&<div style={{marginLeft:"auto",color:C.cyan,fontSize:20}}>✓</div>}
+            </div>
+          ))}
+          <div style={{display:"flex",gap:10}}>
+            <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(1)}>← Volver</button>
+            <button type="button" style={{...S.btn(),flex:2,opacity:staff?1:0.4}} disabled={!staff} onClick={()=>setStep(3)}>Continuar →</button>
+          </div>
+        </>}
+
+        {/* PASO 3: CALENDARIO */}
+        {step===3&&<>
+          <div style={{fontWeight:700,fontSize:17,color:C.accent,marginBottom:4}}>Elige una fecha</div>
+          <div style={{color:C.muted,fontSize:13,marginBottom:14}}>Con: <b style={{color:C.text}}>{staff?.name}</b></div>
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <button type="button" onClick={()=>{if(mo===0){setMo(11);setYr(y=>y-1)}else setMo(m=>m-1)}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>‹</button>
+            <div style={{fontWeight:700,fontSize:15}}>{MONTHS[mo]} {yr}</div>
+            <button type="button" onClick={()=>{if(mo===11){setMo(0);setYr(y=>y+1)}else setMo(m=>m+1)}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>›</button>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
+            {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:11,color:C.muted,paddingBottom:5}}>{d}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:14}}>
+            {days.map((d,i)=>{
+              if(!d) return <div key={i}/>;
+              const st=dayStatus(d), sel=date&&toStr(d)===toStr(date);
+              return (
+                <div key={i} onClick={()=>{if(st==="avail"){setDate(d);setTime(null);}}}
+                  style={{background:sel?"linear-gradient(135deg,#c9a84c,#4ecdc4)":DC[st],border:`1px solid ${sel?"transparent":C.border}`,borderRadius:9,padding:"8px 0",textAlign:"center",cursor:st==="avail"?"pointer":"default",color:sel?"#000":DTC[st],fontWeight:sel?700:400,fontSize:13}}>
+                  {d.getDate()}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* HORAS */}
+          {date&&<>
+            <div style={{fontWeight:700,color:C.cyan,marginBottom:10}}>Horarios — {date.getDate()} de {MONTHS[date.getMonth()]}</div>
+            {times.m.length>0&&<>
+              <div style={{fontSize:12,color:C.muted,marginBottom:6}}>🌅 Mañana</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                {times.m.map(h=><div key={h} onClick={()=>setTime(h)} style={{padding:"9px 4px",borderRadius:9,border:`1px solid ${time===h?C.accent:C.border}`,background:time===h?C.accent+"22":"transparent",color:time===h?C.accent:C.muted,cursor:"pointer",fontSize:13,textAlign:"center",fontWeight:time===h?700:400}}>{h}</div>)}
+              </div>
+            </>}
+            {times.a.length>0&&<>
+              <div style={{fontSize:12,color:C.muted,marginBottom:6}}>🌆 Tarde</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                {times.a.map(h=><div key={h} onClick={()=>setTime(h)} style={{padding:"9px 4px",borderRadius:9,border:`1px solid ${time===h?C.accent:C.border}`,background:time===h?C.accent+"22":"transparent",color:time===h?C.accent:C.muted,cursor:"pointer",fontSize:13,textAlign:"center",fontWeight:time===h?700:400}}>{h}</div>)}
+              </div>
+            </>}
+          </>}
+
+          <div style={{display:"flex",gap:10,marginTop:8}}>
+            <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(2)}>← Volver</button>
+            <button type="button" style={{...S.btn(),flex:2,opacity:(date&&time)?1:0.4}} disabled={!(date&&time)} onClick={()=>setStep(4)}>Continuar →</button>
+          </div>
+        </>}
+
+        {/* PASO 4: DATOS */}
+        {step===4&&<>
+          <div style={{fontWeight:700,fontSize:17,color:C.accent,marginBottom:14}}>Tus datos</div>
+          <div style={{...S.card,border:`1px solid ${C.accent}44`,marginBottom:16}}>
+            {[["Servicio",svc?.name],["Profesional",staff?.name],["Fecha y hora",date?`${date.getDate()} ${MONTHS[date.getMonth()]} · ${time}`:""]].map(([k,v])=>(
+              <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                <span style={{color:C.muted}}>{k}</span><span style={{fontWeight:700,color:k==="Fecha y hora"?C.accent:C.text}}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={S.label}>Nombre completo</label>
+            <input style={S.input} type="text" placeholder="Carlos Pérez" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={S.label}>Teléfono</label>
+            <input style={S.input} type="tel" placeholder="0981-000000" value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>
+          </div>
+          {err&&<div style={{color:C.danger,fontSize:13,marginBottom:10}}>{err}</div>}
+          <div style={{display:"flex",gap:10}}>
+            <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(3)}>← Volver</button>
+            <button type="button" style={{...S.btn(),flex:2}} onClick={confirm}>Confirmar ✓</button>
+          </div>
+        </>}
+
+        {/* PASO 5: ÉXITO */}
+        {step===5&&<div style={{textAlign:"center",padding:"32px 16px"}}>
+          <div style={{fontSize:60,marginBottom:14}}>🎉</div>
+          <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:10}}>¡Cita agendada!</div>
+          <div style={{color:C.muted,fontSize:14,lineHeight:1.8,marginBottom:24}}>
+            <b style={{color:C.text}}>{name}</b>, tu cita de <b style={{color:C.text}}>{svc?.name}</b><br/>
+            con <b style={{color:C.text}}>{staff?.name}</b><br/>
+            el <b style={{color:C.accent}}>{date?.getDate()} de {MONTHS[date?.getMonth()]} a las {time}</b>
+          </div>
+          <button type="button" style={{...S.btn(),width:"100%"}} onClick={()=>{setStep(1);setSvc(null);setStaff(null);setDate(null);setTime(null);setName("");setPhone("");setErr("");}}>Agendar otra cita</button>
+        </div>}
+      </div>
+
+      <button type="button" onClick={onGoAdmin} style={{position:"fixed",bottom:18,right:16,background:C.card,border:`1px solid ${C.border}`,borderRadius:24,padding:"7px 14px",color:C.muted,fontSize:12,cursor:"pointer"}}>🔒 Acceso staff</button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════════
+function Login({users, onLogin, onBack}){
+  const [sel,setSel] = useState(null);
+  const [pin,setPin] = useState("");
+  const [err,setErr] = useState("");
+
+  const tap = (d) => {
+    if(pin.length>=4) return;
+    const np=pin+d;
+    setPin(np);
+    if(np.length===4){
+      setTimeout(()=>{
+        if(np===sel.pin){onLogin(sel);}
+        else{setErr("PIN incorrecto");setPin("");}
+      },200);
+    }
+  };
+
+  return (
+    <div style={{...S.app,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"44px 24px 24px",textAlign:"center"}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><Logo size={52}/></div>
+        <div style={{fontSize:22,fontWeight:900,color:C.accent,marginBottom:4}}>Acceso Staff</div>
+        <div style={{fontSize:13,color:C.muted}}>Taseca · Barber & Tattoo</div>
+      </div>
+      <div style={{padding:"0 18px 40px",flex:1}}>
+        {!sel&&<>
+          <div style={{fontSize:14,color:C.muted,marginBottom:14,textAlign:"center"}}>Selecciona tu perfil</div>
+          {users.map(u=>(
+            <div key={u.id} onClick={()=>{setSel(u);setPin("");setErr("");}} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 15px",marginBottom:10,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+                {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:u.name[0]}
+              </div>
+              <div><div style={{fontWeight:700}}>{u.name}</div><div style={{color:C.muted,fontSize:13}}>{ROLES[u.role]}</div></div>
+              <div style={{marginLeft:"auto",color:C.muted,fontSize:18}}>›</div>
+            </div>
+          ))}
+          <button type="button" style={{...S.btn("ghost"),width:"100%",marginTop:8}} onClick={onBack}>← Volver al inicio</button>
+        </>}
+
+        {sel&&<>
+          <div style={{textAlign:"center",marginBottom:22}}>
+            <div style={{width:54,height:54,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,margin:"0 auto 10px",overflow:"hidden"}}>
+              {sel.photo?<img src={sel.photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:sel.name[0]}
+            </div>
+            <div style={{fontWeight:700,fontSize:16}}>{sel.name}</div>
+            <div style={{color:C.muted,fontSize:13,marginTop:12}}>Ingresa tu PIN</div>
+          </div>
+          <div style={{display:"flex",gap:14,justifyContent:"center",marginBottom:26}}>
+            {[0,1,2,3].map(i=><div key={i} style={{width:15,height:15,borderRadius:"50%",background:i<pin.length?C.accent:C.border}}/>)}
+          </div>
+          {err&&<div style={{color:C.danger,fontSize:13,textAlign:"center",marginBottom:12}}>{err}</div>}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,maxWidth:260,margin:"0 auto"}}>
+            {[1,2,3,4,5,6,7,8,9].map(n=>(
+              <button type="button" key={n} onClick={()=>tap(String(n))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,padding:"16px",fontSize:22,fontWeight:700,color:C.text,cursor:"pointer",textAlign:"center"}}>{n}</button>
+            ))}
+            <button type="button" onClick={()=>{setSel(null);setPin("");setErr("");}} style={{background:"transparent",border:"none",fontSize:13,color:C.muted,cursor:"pointer",padding:"16px",textAlign:"center"}}>←</button>
+            <button type="button" onClick={()=>tap("0")} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,padding:"16px",fontSize:22,fontWeight:700,color:C.text,cursor:"pointer",textAlign:"center"}}>0</button>
+            <button type="button" onClick={()=>setPin(p=>p.slice(0,-1))} style={{background:"transparent",border:"none",fontSize:20,color:C.muted,cursor:"pointer",padding:"16px",textAlign:"center"}}>⌫</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PANEL ADMIN
+// ═══════════════════════════════════════════════════════════════════
+function Admin({user, users, setUsers, services, setServices, products, setProducts, clients, setClients, appointments, setAppointments, sales, setSales, onLogout}){
+  if(!user) return null;
+  const tabs = [{id:"agenda",icon:"📅",label:"Agenda"},{id:"clientes",icon:"👥",label:"Clientes"},{id:"catalogo",icon:"🛒",label:"Catálogo"},{id:"caja",icon:"💰",label:"Caja"},{id:"config",icon:"⚙️",label:"Config"}].filter(t=>(ROLE_TABS[user.role]||[]).includes(t.id));
+  const [tab,setTab] = useState(tabs[0]?.id||"agenda");
+  const [sub,setSub] = useState("servicios");
+  const [modal,setModal] = useState(null); // {type, data}
+  const [schedUser,setSchedUser] = useState(null);
+  const [schedYr,setSchedYr] = useState(new Date().getFullYear());
+  const [schedMo,setSchedMo] = useState(new Date().getMonth());
+  const [schedDate,setSchedDate] = useState(null);
+  const [syncing,setSyncing] = useState(false);
+  const [lastSync,setLastSync] = useState(null);
+
+  const doSync = async () => {
+    setSyncing(true);
+    try{
+      await fetch(SHEETS_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({type:"sync",action:"all",payload:{appointments,clients,sales,services,products}}),mode:"no-cors"});
+      setLastSync(new Date().toLocaleTimeString());
+    }catch(e){}
+    setSyncing(false);
+  };
+
+  const fab = {position:"fixed",bottom:88,right:18,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:50,height:50,fontSize:24,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 18px #c9a84c55",zIndex:99};
+
+  // ── MODALES ────────────────────────────────────────────────────
+  const closeM = () => setModal(null);
+
+  const ServiceModal = () => {
+    const d = modal?.data||{};
+    const [nm,setNm] = useState(d.name||"");
+    const [pr,setPr] = useState(d.price||"");
+    const [du,setDu] = useState(d.duration||30);
+    const [ca,setCa] = useState(d.category||"barberia");
+    const save = () => {
+      if(!nm||!pr) return;
+      const item={...(d.id?{id:d.id}:{id:Date.now()}),name:nm,price:Number(pr),duration:Number(du),category:ca};
+      d.id?setServices(s=>s.map(x=>x.id===d.id?item:x)):setServices(s=>[...s,item]);
+      syncSheets("servicio",d.id?"update":"add",item);
+      closeM();
+    };
+    return <Modal title={d.id?"Editar Servicio":"Nuevo Servicio"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Corte clásico"/>
+      <Field label="Precio ($)" value={pr} onChange={setPr} type="number" placeholder="15"/>
+      <Field label="Duración (min)" value={du} onChange={setDu} type="number" placeholder="30"/>
+      <Field label="Categoría" value={ca} onChange={setCa} options={[{v:"barberia",l:"Barbería"},{v:"tatuaje",l:"Tatuaje"}]}/>
+    </Modal>;
+  };
+
+  const ProductModal = () => {
+    const d = modal?.data||{};
+    const [nm,setNm] = useState(d.name||"");
+    const [pr,setPr] = useState(d.price||"");
+    const [st,setSt] = useState(d.stock||0);
+    const save = () => {
+      if(!nm||!pr) return;
+      const item={...(d.id?{id:d.id}:{id:Date.now()}),name:nm,price:Number(pr),stock:Number(st)};
+      d.id?setProducts(p=>p.map(x=>x.id===d.id?item:x)):setProducts(p=>[...p,item]);
+      syncSheets("producto",d.id?"update":"add",item);
+      closeM();
+    };
+    return <Modal title={d.id?"Editar Producto":"Nuevo Producto"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Pomada fijadora"/>
+      <Field label="Precio ($)" value={pr} onChange={setPr} type="number" placeholder="10"/>
+      <Field label="Stock" value={st} onChange={setSt} type="number" placeholder="20"/>
+    </Modal>;
+  };
+
+  const ClientModal = () => {
+    const d = modal?.data||{};
+    const [nm,setNm] = useState(d.name||"");
+    const [ph,setPh] = useState(d.phone||"");
+    const save = () => {
+      if(!nm) return;
+      const item={...(d.id?{id:d.id,visits:d.visits,lastVisit:d.lastVisit}:{id:Date.now(),visits:0,lastVisit:"-"}),name:nm,phone:ph};
+      d.id?setClients(c=>c.map(x=>x.id===d.id?item:x)):setClients(c=>[...c,item]);
+      syncSheets("cliente",d.id?"update":"add",item);
+      closeM();
+    };
+    return <Modal title={d.id?"Editar Cliente":"Nuevo Cliente"} onClose={closeM} onSave={save}>
+      <Field label="Nombre completo" value={nm} onChange={setNm} placeholder="Carlos Méndez"/>
+      <Field label="Teléfono" value={ph} onChange={setPh} placeholder="0981-000000"/>
+    </Modal>;
+  };
+
+  const ApptModal = () => {
+    const d = modal?.data||{};
+    const [cn,setCn] = useState(d.clientName||"");
+    const [sv,setSv] = useState(d.service||"");
+    const [dt,setDt] = useState(d.date||"");
+    const [tm,setTm] = useState(d.time||"");
+    const [st,setSt] = useState(d.status||"pendiente");
+    const save = () => {
+      if(!cn||!sv||!dt) return;
+      const item={...(d.id?{id:d.id}:{id:Date.now()}),clientName:cn,service:sv,date:dt,time:tm,staffId:d.staffId||null,status:st};
+      d.id?setAppointments(a=>a.map(x=>x.id===d.id?item:x)):setAppointments(a=>[...a,item]);
+      syncSheets("cita",d.id?"update":"add",item);
+      closeM();
+    };
+    return <Modal title={d.id?"Editar Cita":"Nueva Cita"} onClose={closeM} onSave={save}>
+      <Field label="Cliente" value={cn} onChange={setCn} placeholder="Nombre del cliente"/>
+      <Field label="Servicio" value={sv} onChange={setSv} placeholder="Corte clásico"/>
+      <Field label="Fecha" value={dt} onChange={setDt} type="date"/>
+      <Field label="Hora" value={tm} onChange={setTm} type="time"/>
+      <Field label="Estado" value={st} onChange={setSt} options={[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"},{v:"cancelado",l:"Cancelado"}]}/>
+    </Modal>;
+  };
+
+  const SaleModal = () => {
+    const [cl,setCl] = useState("");
+    const [it,setIt] = useState("");
+    const [to,setTo] = useState("");
+    const [mt,setMt] = useState("efectivo");
+    const save = () => {
+      if(!cl||!to) return;
+      const item={id:Date.now(),client:cl,items:it.split(",").map(i=>i.trim()),total:Number(to),method:mt,date:new Date().toISOString().slice(0,10)};
+      setSales(s=>[...s,item]);
+      syncSheets("venta","add",item);
+      closeM();
+    };
+    return <Modal title="Nueva Venta" onClose={closeM} onSave={save}>
+      <Field label="Cliente" value={cl} onChange={setCl} placeholder="Nombre del cliente"/>
+      <Field label="Items (separar por coma)" value={it} onChange={setIt} placeholder="Corte, Pomada"/>
+      <Field label="Total ($)" value={to} onChange={setTo} type="number" placeholder="25"/>
+      <Field label="Método de pago" value={mt} onChange={setMt} options={[{v:"efectivo",l:"Efectivo"},{v:"tarjeta",l:"Tarjeta"},{v:"transferencia",l:"Transferencia"}]}/>
+    </Modal>;
+  };
+
+  const UserModal = () => {
+    const d = modal?.data||{};
+    const [nm,setNm] = useState(d.name||"");
+    const [ro,setRo] = useState(d.role||"barbero");
+    const [em,setEm] = useState(d.email||"");
+    const [pi,setPi] = useState(d.pin||"");
+    const save = () => {
+      if(!nm) return;
+      const item={...(d.id?d:{id:Date.now(),photo:null,workDays:[1,2,3,4,5],blockedSlots:{}}),name:nm,role:ro,email:em,pin:pi};
+      d.id?setUsers(u=>u.map(x=>x.id===d.id?item:x)):setUsers(u=>[...u,item]);
+      closeM();
+    };
+    return <Modal title={d.id?"Editar Usuario":"Nuevo Usuario"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Juan Barbero"/>
+      <Field label="Rol" value={ro} onChange={setRo} options={[{v:"admin",l:"Administrador"},{v:"barbero",l:"Barbero"},{v:"tatuador",l:"Tatuador/a"},{v:"recepcionista",l:"Recepcionista"}]}/>
+      <Field label="Email" value={em} onChange={setEm} placeholder="usuario@shop.com"/>
+      <Field label="PIN (4 dígitos)" value={pi} onChange={setPi} type="number" placeholder="1234"/>
+    </Modal>;
+  };
+
+  // ── SUBIDA DE FOTO ────────────────────────────────────────────
+  const PhotoBtn = ({u}) => {
+    const ref = useRef();
+    return <>
+      <input type="file" accept="image/*" ref={ref} style={{display:"none"}} onChange={e=>{
+        if(!e.target.files[0]) return;
+        const r=new FileReader();
+        r.onload=ev=>setUsers(us=>us.map(x=>x.id===u.id?{...x,photo:ev.target.result}:x));
+        r.readAsDataURL(e.target.files[0]);
+      }}/>
+      <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>ref.current.click()}>📷 Foto</button>
+    </>;
+  };
+
+  // ── MODAL HORARIO ─────────────────────────────────────────────
+  const SchedModal = () => {
+    if(!schedUser) return null;
+    const su = users.find(u=>u.id===schedUser);
+    if(!su) return null;
+    const days = calDays(schedYr, schedMo);
+    const togDay = (dow) => setUsers(us=>us.map(u=>u.id===su.id?{...u,workDays:u.workDays.includes(dow)?u.workDays.filter(d=>d!==dow):[...u.workDays,dow]}:u));
+    const togSlot = (ds, slot) => setUsers(us=>us.map(u=>{
+      if(u.id!==su.id) return u;
+      const cur=u.blockedSlots[ds]||[];
+      return {...u,blockedSlots:{...u.blockedSlots,[ds]:cur.includes(slot)?cur.filter(s=>s!==slot):[...cur,slot]}};
+    }));
+    return (
+      <div style={S.overlay} onClick={()=>setSchedUser(null)}>
+        <div style={{...S.modalBox,maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
+          <div style={{...S.row,marginBottom:16}}>
+            <div style={{fontSize:17,fontWeight:800,color:C.accent}}>🗓 Horario — {su.name}</div>
+            <button type="button" onClick={()=>setSchedUser(null)} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:8}}>Días laborales</div>
+          <div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
+            {[["Do",0],["Lu",1],["Ma",2],["Mi",3],["Ju",4],["Vi",5],["Sa",6]].map(([l,d])=>(
+              <button type="button" key={d} onClick={()=>togDay(d)} style={{padding:"6px 12px",borderRadius:20,border:"none",fontSize:13,fontWeight:700,cursor:"pointer",background:su.workDays.includes(d)?C.cyan:"#1a2230",color:su.workDays.includes(d)?"#000":C.muted}}>{l}</button>
+            ))}
+          </div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:8}}>Bloquear turnos por fecha</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <button type="button" onClick={()=>{if(schedMo===0){setSchedMo(11);setSchedYr(y=>y-1)}else setSchedMo(m=>m-1)}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>‹</button>
+            <div style={{fontWeight:700,fontSize:14}}>{MONTHS[schedMo]} {schedYr}</div>
+            <button type="button" onClick={()=>{if(schedMo===11){setSchedMo(0);setSchedYr(y=>y+1)}else setSchedMo(m=>m+1)}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>›</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:12}}>
+            {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:C.muted,paddingBottom:3}}>{d}</div>)}
+            {days.map((d,i)=>{
+              if(!d) return <div key={i}/>;
+              const ds=toStr(d), bl=su.blockedSlots[ds]||[], isWork=su.workDays.includes(d.getDay());
+              const both=bl.includes("morning")&&bl.includes("afternoon"), part=bl.length>0&&!both;
+              return (
+                <div key={i} onClick={()=>{if(isWork) setSchedDate(schedDate===ds?null:ds);}} style={{background:!isWork?"#0a0a0a":both?C.danger+"33":part?C.accent+"33":C.card,border:`1px solid ${!isWork?"transparent":both?C.danger+"55":part?C.accent+"55":C.border}`,borderRadius:8,padding:"7px 0",textAlign:"center",fontSize:12,color:!isWork?C.border:both?C.danger:part?C.accent:C.text,cursor:isWork?"pointer":"default"}}>
+                  {d.getDate()}{both&&<div style={{fontSize:8}}>🔒</div>}
+                </div>
+              );
+            })}
+          </div>
+          {schedDate&&(
+            <div style={{background:"#0d1520",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.cyan,marginBottom:10}}>Turnos — {schedDate}</div>
+              {[["morning","🌅 Mañana (9:00-13:00)"],["afternoon","🌆 Tarde (14:00-19:00)"]].map(([slot,label])=>{
+                const bl=(su.blockedSlots[schedDate]||[]).includes(slot);
+                return (
+                  <div key={slot} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:13,color:bl?C.danger:C.text}}>{label}</span>
+                    <button type="button" onClick={()=>togSlot(schedDate,slot)} style={{padding:"5px 14px",borderRadius:20,border:"none",fontSize:12,fontWeight:700,cursor:"pointer",background:bl?C.danger+"33":"#4ecdc422",color:bl?C.danger:C.cyan}}>{bl?"🔒 Bloqueado":"✓ Disponible"}</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const totalV = sales.reduce((a,s)=>a+s.total,0);
+
+  return (
+    <div style={{...S.app,paddingBottom:80}}>
+      {/* HEADER */}
+      <div style={{background:"linear-gradient(135deg,#0d1520,#080c10)",padding:"14px 16px 12px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={S.row}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <Logo size={28}/>
+            <div>
+              <div style={{fontSize:17,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TASECA</div>
+              <div style={{fontSize:11,color:C.muted}}>Hola <b style={{color:C.accent}}>{user.name}</b> · {ROLES[user.role]}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {lastSync&&<span style={{fontSize:10,color:C.success}}>✓ {lastSync}</span>}
+            {syncing&&<span style={{fontSize:10,color:C.accent}}>⏳</span>}
+            <button type="button" onClick={onLogout} style={{background:C.border,border:"none",borderRadius:10,padding:"6px 12px",color:C.muted,fontSize:12,cursor:"pointer"}}>Salir 🚪</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"14px 14px"}}>
+
+        {/* AGENDA */}
+        {tab==="agenda"&&<>
+          <div style={{fontSize:17,fontWeight:700,color:C.accent,marginBottom:13}}>📅 Agenda</div>
+          {appointments.length===0&&<div style={{color:C.muted,textAlign:"center",padding:30}}>Sin citas registradas</div>}
+          {appointments.map(a=>{
+            const st=users.find(u=>u.id===a.staffId);
+            return (
+              <div key={a.id} style={S.card}>
+                <div style={S.row}>
+                  <div><div style={{fontWeight:700}}>{a.clientName}</div><div style={{color:C.muted,fontSize:13}}>{a.service} · {st?.name||"—"}</div></div>
+                  <span style={S.badge(STATUS_C[a.status]||"#888")}>{a.status}</span>
+                </div>
+                <div style={{marginTop:6,display:"flex",gap:12}}>
+                  <span style={{color:C.accent,fontSize:13}}>📆 {a.date}</span>
+                  <span style={{color:C.muted,fontSize:13}}>🕐 {a.time}</span>
+                </div>
+                <div style={{marginTop:8,display:"flex",gap:8}}>
+                  <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setModal({type:"appt",data:a})}>Editar</button>
+                  <button type="button" style={{...S.btn("danger"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>{setAppointments(p=>p.filter(x=>x.id!==a.id));syncSheets("cita","delete",{id:a.id});}}>Eliminar</button>
+                </div>
+              </div>
+            );
+          })}
+          <button type="button" style={fab} onClick={()=>setModal({type:"appt",data:{}})}>+</button>
+        </>}
+
+        {/* CLIENTES */}
+        {tab==="clientes"&&<>
+          <div style={{fontSize:17,fontWeight:700,color:C.accent,marginBottom:13}}>👥 Clientes</div>
+          {clients.map(c=>(
+            <div key={c.id} style={S.card}>
+              <div style={S.row}>
+                <div style={{display:"flex",alignItems:"center",gap:11}}>
+                  <div style={{width:42,height:42,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{c.name[0]}</div>
+                  <div><div style={{fontWeight:700}}>{c.name}</div><div style={{color:C.muted,fontSize:13}}>📞 {c.phone}</div></div>
+                </div>
+                <span style={S.badge(C.accent)}>{c.visits} visitas</span>
+              </div>
+              <div style={{marginTop:6,color:C.muted,fontSize:12}}>Última: {c.lastVisit}</div>
+              <div style={{marginTop:8,display:"flex",gap:8}}>
+                <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setModal({type:"client",data:c})}>Editar</button>
+                <button type="button" style={{...S.btn("danger"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>{setClients(p=>p.filter(x=>x.id!==c.id));syncSheets("cliente","delete",{id:c.id});}}>Eliminar</button>
+              </div>
+            </div>
+          ))}
+          <button type="button" style={fab} onClick={()=>setModal({type:"client",data:{}})}>+</button>
+        </>}
+
+        {/* CATÁLOGO */}
+        {tab==="catalogo"&&<>
+          <div style={{fontSize:17,fontWeight:700,color:C.accent,marginBottom:13}}>🛒 Catálogo</div>
+          <div style={{display:"flex",gap:8,marginBottom:13}}>
+            {["servicios","productos"].map(t=><button type="button" key={t} style={{padding:"6px 16px",borderRadius:20,border:"none",background:sub===t?C.accent:C.border,color:sub===t?"#000":C.muted,fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={()=>setSub(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
+          </div>
+          {sub==="servicios"&&services.map(sv=>(
+            <div key={sv.id} style={S.card}>
+              <div style={S.row}>
+                <div><div style={{fontWeight:700}}>{sv.name}</div><div style={{color:C.muted,fontSize:13}}>⏱ {sv.duration} min</div></div>
+                <div style={{textAlign:"right"}}><div style={{color:C.accent,fontWeight:900,fontSize:16}}>${sv.price}</div><span style={S.badge(CAT_C[sv.category]||"#888")}>{sv.category}</span></div>
+              </div>
+              <div style={{marginTop:8,display:"flex",gap:8}}>
+                <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setModal({type:"service",data:sv})}>Editar</button>
+                <button type="button" style={{...S.btn("danger"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>{setServices(p=>p.filter(x=>x.id!==sv.id));syncSheets("servicio","delete",{id:sv.id});}}>Eliminar</button>
+              </div>
+            </div>
+          ))}
+          {sub==="productos"&&products.map(p=>(
+            <div key={p.id} style={S.card}>
+              <div style={S.row}>
+                <div><div style={{fontWeight:700}}>{p.name}</div><div style={{color:p.stock<5?C.danger:C.muted,fontSize:13}}>📦 Stock: {p.stock}</div></div>
+                <div style={{color:C.accent,fontWeight:900,fontSize:16}}>${p.price}</div>
+              </div>
+              <div style={{marginTop:8,display:"flex",gap:8}}>
+                <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setModal({type:"product",data:p})}>Editar</button>
+                <button type="button" style={{...S.btn("danger"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>{setProducts(pp=>pp.filter(x=>x.id!==p.id));syncSheets("producto","delete",{id:p.id});}}>Eliminar</button>
+              </div>
+            </div>
+          ))}
+          <button type="button" style={fab} onClick={()=>setModal({type:sub==="servicios"?"service":"product",data:{}})}>+</button>
+        </>}
+
+        {/* CAJA */}
+        {tab==="caja"&&<>
+          <div style={{fontSize:17,fontWeight:700,color:C.accent,marginBottom:13}}>💰 Caja & Ventas</div>
+          <div style={{background:C.accent+"18",border:`1px solid ${C.accent}44`,borderRadius:14,padding:"14px 15px",marginBottom:12}}>
+            <div style={{color:C.muted,fontSize:12}}>Total recaudado</div>
+            <div style={{color:C.accent,fontSize:28,fontWeight:900}}>${totalV}</div>
+            <div style={{color:C.muted,fontSize:12}}>{sales.length} ventas</div>
+          </div>
+          {sales.map(s=>(
+            <div key={s.id} style={S.card}>
+              <div style={S.row}>
+                <div><div style={{fontWeight:700}}>{s.client}</div><div style={{color:C.muted,fontSize:12}}>{(s.items||[]).join(", ")}</div></div>
+                <div style={{textAlign:"right"}}><div style={{color:C.accent,fontWeight:900}}>${s.total}</div><span style={S.badge(C.success)}>{s.method}</span></div>
+              </div>
+              <div style={{marginTop:5,color:C.muted,fontSize:12}}>📆 {s.date}</div>
+            </div>
+          ))}
+          <button type="button" style={fab} onClick={()=>setModal({type:"sale",data:{}})}>+</button>
+        </>}
+
+        {/* CONFIG */}
+        {tab==="config"&&user.role==="admin"&&<>
+          <div style={{fontSize:17,fontWeight:700,color:C.accent,marginBottom:13}}>⚙️ Configuración</div>
+          <div style={{...S.card,border:`1.5px solid ${C.cyan}44`,marginBottom:16}}>
+            <div style={{fontWeight:700,color:C.cyan,marginBottom:8}}>📊 Google Sheets</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:C.success}}/>
+              <span style={{color:C.success,fontSize:13,fontWeight:700}}>Conectado automáticamente</span>
+            </div>
+            <button type="button" style={{...S.btn(),width:"auto",padding:"8px 16px",fontSize:13}} onClick={doSync} disabled={syncing}>
+              {syncing?"⏳ Sincronizando...":"🔄 Sincronizar todo ahora"}
+            </button>
+            {lastSync&&<div style={{color:C.muted,fontSize:11,marginTop:6}}>Última sync: {lastSync}</div>}
+          </div>
+          <div style={{fontWeight:700,color:C.cyan,marginBottom:10}}>👤 Personal & Horarios</div>
+          {users.map(u=>(
+            <div key={u.id} style={S.card}>
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <div style={{width:44,height:44,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,overflow:"hidden",flexShrink:0}}>
+                  {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:u.name[0]}
+                </div>
+                <div>
+                  <div style={{fontWeight:700}}>{u.name}</div>
+                  <div style={{color:C.muted,fontSize:13}}>{ROLES[u.role]}</div>
+                  <div style={{color:C.muted,fontSize:11}}>Trabaja: {(u.workDays||[]).map(d=>DAYS[d]).join(" · ")}</div>
+                </div>
+              </div>
+              <div style={{marginTop:9,display:"flex",gap:8,flexWrap:"wrap"}}>
+                <PhotoBtn u={u}/>
+                <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setModal({type:"user",data:u})}>Editar</button>
+                <button type="button" style={{...S.btn("cyan"),width:"auto",padding:"5px 12px",fontSize:12,color:"#000"}} onClick={()=>{setSchedUser(u.id);setSchedDate(null);}}>🗓 Horario</button>
+                <button type="button" style={{...S.btn("danger"),width:"auto",padding:"5px 12px",fontSize:12}} onClick={()=>setUsers(p=>p.filter(x=>x.id!==u.id))}>Eliminar</button>
+              </div>
+            </div>
+          ))}
+          <button type="button" style={{...S.btn(),width:"100%",padding:"11px"}} onClick={()=>setModal({type:"user",data:{}})}>+ Agregar usuario</button>
+        </>}
+      </div>
+
+      {/* TAB BAR */}
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#0d1520",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100}}>
+        {tabs.map(t=><button type="button" key={t.id} style={{flex:1,padding:"10px 0 8px",background:"none",border:"none",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}} onClick={()=>setTab(t.id)}>
+          <span style={{fontSize:19}}>{t.icon}</span>
+          <span style={{fontSize:10,fontWeight:tab===t.id?700:400}}>{t.label}</span>
+        </button>)}
+      </div>
+
+      {/* MODALES */}
+      {modal?.type==="service"&&<ServiceModal/>}
+      {modal?.type==="product"&&<ProductModal/>}
+      {modal?.type==="client"&&<ClientModal/>}
+      {modal?.type==="appt"&&<ApptModal/>}
+      {modal?.type==="sale"&&<SaleModal/>}
+      {modal?.type==="user"&&<UserModal/>}
+      {schedUser&&<SchedModal/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ROOT
+// ═══════════════════════════════════════════════════════════════════
+function App(){
+  const [screen,setScreen] = useState("public");
+  const [user,setUser] = useState(null);
+  const [users,setUsers]   = useState(()=>load("users",DEF_USERS));
+  const [services,setServices] = useState(()=>load("services",DEF_SERVICES));
+  const [products,setProducts] = useState(()=>load("products",DEF_PRODUCTS));
+  const [clients,setClients]   = useState(()=>load("clients",DEF_CLIENTS));
+  const [appts,setAppts]       = useState(()=>load("appts",DEF_APPOINTMENTS));
+  const [sales,setSales]       = useState(()=>load("sales",DEF_SALES));
+
+  useEffect(()=>save("users",users),[users]);
+  useEffect(()=>save("services",services),[services]);
+  useEffect(()=>save("products",products),[products]);
+  useEffect(()=>save("clients",clients),[clients]);
+  useEffect(()=>save("appts",appts),[appts]);
+  useEffect(()=>save("sales",sales),[sales]);
+
+  if(screen==="public") return <PublicView services={services} appointments={appts} users={users} onBook={a=>setAppts(p=>[...p,a])} onGoAdmin={()=>setScreen("login")}/>;
+  if(screen==="login") return <Login users={users} onLogin={u=>{setUser(u);setScreen("admin");}} onBack={()=>setScreen("public")}/>;
+  return <Admin user={user} users={users} setUsers={setUsers} services={services} setServices={setServices} products={products} setProducts={setProducts} clients={clients} setClients={setClients} appointments={appts} setAppointments={setAppts} sales={sales} setSales={setSales} onLogout={()=>{setUser(null);setScreen("public");}}/>;
+}
+
+try {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+} catch(e) {
+  document.getElementById('root').innerHTML = '<div style="color:red;padding:20px">Error: '+e.message+'</div>';
+  console.error(e);
+}
+</script>
+</body>
+</html>
