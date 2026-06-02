@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#080c10"/>
+  <title>Taseca · Barber & Tattoo Studio</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{background:#080c10;font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden}
+    #root{max-width:430px;margin:0 auto;min-height:100vh}
+    input,select,button,textarea{font-family:inherit}
+    input:focus,select:focus,textarea:focus{outline:1px solid #c9a84c}
+    select option{background:#1a2230;color:#f0f0f0}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:#0d1520}
+    ::-webkit-scrollbar-thumb{background:#c9a84c44;border-radius:4px}
+  </style>
+</head>
+<body>
+<div id="root"><div style="color:#c9a84c;text-align:center;padding:40px;font-size:18px">Cargando Taseca...</div></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyCBUvFv_ftz2kH3_YBA-CM_0Kwgpa_ftSk",
+  authDomain: "tasecav2.firebaseapp.com",
+  projectId: "tasecav2",
+  storageBucket: "tasecav2.firebasestorage.app",
+  messagingSenderId: "49724085265",
+  appId: "1:49724085265:web:b3a1a05196702aa2524db0"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+window._db = db;
+window._firebase = { collection, doc, setDoc, deleteDoc, getDocs, onSnapshot };
+window._firebaseReady = true;
+window.dispatchEvent(new Event("firebaseReady"));
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const {useState,useRef,useMemo,useEffect,useCallback} = React;
+
+// ─── FIREBASE ────────────────────────────────────────────────────
+const DB = {
+  save: async(col,id,data)=>{ const {doc,setDoc}=window._firebase; await setDoc(doc(window._db,col,String(id)),data); },
+  del:  async(col,id)=>{ const {doc,deleteDoc}=window._firebase; await deleteDoc(doc(window._db,col,String(id))); },
+  getAll: async(col)=>{ const {collection,getDocs}=window._firebase; const snap=await getDocs(collection(window._db,col)); return snap.docs.map(d=>d.data()); },
+};
+
+// ─── CONSTANTES ───────────────────────────────────────────────────
+const C={bg:"#080c10",card:"#111820",card2:"#161e2a",accent:"#c9a84c",cyan:"#4ecdc4",text:"#f0f0f0",muted:"#6a7a8a",border:"#1e2a35",success:"#2ecc71",danger:"#e74c3c",warn:"#f39c12"};
+const ROLES={admin:"Administrador",barbero:"Barbero",tatuador:"Tatuador/a",recepcionista:"Recepcionista"};
+const ROLE_TABS={admin:["agenda","clientes","fidelidad","catalogo","caja","config"],barbero:["agenda","clientes","fidelidad","catalogo"],tatuador:["agenda","clientes","fidelidad","catalogo"],recepcionista:["agenda","clientes","fidelidad"]};
+const STATUS_C={confirmado:C.cyan,pendiente:C.warn,cancelado:C.danger,walk_in:"#8e44ad"};
+const STATUS_L={confirmado:"Confirmado",pendiente:"Pendiente",cancelado:"Cancelado",walk_in:"Sin cita"};
+const CAT_C={barberia:"#3498db",tatuaje:"#8e44ad"};
+const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const MONTHS_S=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const DAYS=["Do","Lu","Ma","Mi","Ju","Vi","Sa"];
+const DAYS_FULL=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+
+// Bloques de 30 min de 8am a 8pm
+const SLOTS = [];
+for(let h=8;h<20;h++){ SLOTS.push(`${String(h).padStart(2,'0')}:00`); SLOTS.push(`${String(h).padStart(2,'0')}:30`); }
+
+const DEF_USERS=[
+  {id:"u1",name:"Juan Barbero",role:"barbero",pin:"1234",photo:null,workDays:[1,2,3,4,5],workStart:"09:00",workEnd:"19:00",blockedSlots:{}},
+  {id:"u2",name:"María Tatuadora",role:"tatuador",pin:"5678",photo:null,workDays:[2,3,4,5,6],workStart:"10:00",workEnd:"18:00",blockedSlots:{}},
+  {id:"u3",name:"Admin",role:"admin",pin:"0000",photo:null,workDays:[1,2,3,4,5,6],workStart:"09:00",workEnd:"19:00",blockedSlots:{}},
+];
+const DEF_SERVICES=[
+  {id:"s1",name:"Corte clásico",category:"barberia",price:15,duration:30},
+  {id:"s2",name:"Barba y perfilado",category:"barberia",price:12,duration:25},
+  {id:"s3",name:"Tatuaje pequeño",category:"tatuaje",price:80,duration:60},
+  {id:"s4",name:"Tatuaje mediano",category:"tatuaje",price:150,duration:120},
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────────
+const toStr=d=>d.toISOString().slice(0,10);
+const todayStr=()=>toStr(new Date());
+const parseTime=t=>{const[h,m]=t.split(":").map(Number);return h*60+m;};
+const formatTime=mins=>`${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+const addMinutes=(t,m)=>formatTime(parseTime(t)+m);
+
+function getWeekDates(baseDate){
+  const d=new Date(baseDate);
+  const day=d.getDay();
+  const monday=new Date(d);
+  monday.setDate(d.getDate()-day);
+  return Array.from({length:7},(_,i)=>{ const dd=new Date(monday); dd.setDate(monday.getDate()+i); return dd; });
+}
+
+function calDays(year,month){
+  const days=[],first=new Date(year,month,1),last=new Date(year,month+1,0);
+  for(let i=0;i<first.getDay();i++) days.push(null);
+  for(let d=1;d<=last.getDate();d++) days.push(new Date(year,month,d));
+  return days;
+}
+
+// ─── ESTILOS BASE ────────────────────────────────────────────────
+const S={
+  app:{background:`linear-gradient(160deg,${C.bg} 0%,#0d1520 100%)`,minHeight:"100vh",maxWidth:430,margin:"0 auto",color:C.text},
+  card:{background:C.card,borderRadius:14,padding:"13px 15px",marginBottom:11,border:`1px solid ${C.border}`},
+  input:{width:"100%",background:"#1a2230",border:`1px solid ${C.border}`,borderRadius:11,padding:"10px 13px",color:C.text,fontSize:14,boxSizing:"border-box",outline:"none",display:"block"},
+  label:{fontSize:12,color:C.muted,marginBottom:5,display:"block"},
+  row:{display:"flex",justifyContent:"space-between",alignItems:"center"},
+  badge:(col)=>({background:col+"22",color:col,fontSize:11,padding:"2px 8px",borderRadius:20,fontWeight:600}),
+  btn:(v="gold")=>({background:v==="gold"?C.accent:v==="cyan"?C.cyan:v==="danger"?C.danger:v==="ghost"?"transparent":C.border,color:v==="ghost"?C.muted:"#000",border:v==="ghost"?`1px solid ${C.border}`:"none",borderRadius:11,padding:"9px 16px",cursor:"pointer",fontWeight:700,fontSize:13}),
+  overlay:{position:"fixed",inset:0,background:"#000d",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"},
+  modalBox:{background:C.card,borderRadius:"20px 20px 0 0",padding:"20px 16px 34px",width:"100%",maxWidth:430,maxHeight:"90vh",overflowY:"auto"},
+};
+
+// ─── LOGO ─────────────────────────────────────────────────────────
+function Logo({size=60}){
+  return <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+    <defs><linearGradient id="lg" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#c9a84c"/><stop offset="100%" stopColor="#4ecdc4"/></linearGradient></defs>
+    <circle cx="50" cy="45" r="36" stroke="#4ecdc4" strokeWidth="0.8" strokeDasharray="3 3" fill="none" opacity="0.5"/>
+    <polygon points="50,8 88,78 12,78" stroke="url(#lg)" strokeWidth="2.5" fill="none"/>
+    <ellipse cx="50" cy="50" rx="13" ry="8" stroke="url(#lg)" strokeWidth="1.8" fill="#080c10"/>
+    <circle cx="50" cy="50" r="4.5" fill="url(#lg)"/><circle cx="50" cy="50" r="2" fill="#000"/>
+    <rect x="40" y="64" width="3" height="7" fill="url(#lg)" rx="1"/>
+    <rect x="45" y="61" width="3" height="10" fill="url(#lg)" rx="1"/>
+    <rect x="50" y="58" width="3" height="13" fill="url(#lg)" rx="1"/>
+    <rect x="55" y="61" width="3" height="10" fill="url(#lg)" rx="1"/>
+    <rect x="60" y="64" width="3" height="7" fill="url(#lg)" rx="1"/>
+    <circle cx="50" cy="8" r="2" fill="#4ecdc4"/><circle cx="88" cy="78" r="2" fill="#4ecdc4"/><circle cx="12" cy="78" r="2" fill="#4ecdc4"/>
+  </svg>;
+}
+
+function Field({label,value,onChange,type="text",options,placeholder}){
+  return <div style={{marginBottom:11}}>
+    <label style={S.label}>{label}</label>
+    {options?<select style={S.input} value={value||""} onChange={e=>onChange(e.target.value)}>
+      <option value="">Seleccionar...</option>
+      {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>:<input style={S.input} type={type} placeholder={placeholder} value={value||""} onChange={e=>onChange(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>}
+  </div>;
+}
+
+function Modal({title,onClose,onSave,children,saveLabel="Guardar"}){
+  return <div style={S.overlay} onClick={onClose}>
+    <div style={S.modalBox} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.key==="Enter"&&e.stopPropagation()}>
+      <div style={{...S.row,marginBottom:16}}>
+        <div style={{fontSize:16,fontWeight:800,color:C.accent}}>{title}</div>
+        <button type="button" onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+      </div>
+      {children}
+      <div style={{display:"flex",gap:10,marginTop:8}}>
+        <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={onClose}>Cancelar</button>
+        <button type="button" style={{...S.btn(),flex:2}} onClick={onSave}>{saveLabel}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CALENDARIO TIPO AGENDA (vista semanal con bloques de 30min)
+// ═══════════════════════════════════════════════════════════════════
+function AgendaCalendar({appointments, users, services, onSlotClick, onApptClick, selectedStaffId}){
+  const [weekBase, setWeekBase] = useState(new Date());
+  const weekDates = getWeekDates(weekBase);
+  const staff = users.find(u=>u.id===selectedStaffId);
+
+  // Horas visibles 8am-8pm
+  const hours = Array.from({length:12},(_,i)=>i+8);
+
+  // Filtrar citas del staff seleccionado para esta semana
+  const weekStr = weekDates.map(d=>toStr(d));
+  const weekAppts = appointments.filter(a=>
+    (!selectedStaffId||a.staffId===selectedStaffId) &&
+    weekStr.includes(a.date)
+  );
+
+  const isWorkSlot=(date,hour,min)=>{
+    if(!staff) return true;
+    const dow=date.getDay();
+    if(!staff.workDays||!staff.workDays.includes(dow)) return false;
+    const slotTime=hour*60+min;
+    const start=parseTime(staff.workStart||"09:00");
+    const end=parseTime(staff.workEnd||"19:00");
+    return slotTime>=start && slotTime<end;
+  };
+
+  const getApptAtSlot=(dateStr,hour,min)=>{
+    const slotTime=`${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+    return weekAppts.find(a=>a.date===dateStr&&a.time===slotTime);
+  };
+
+  const SLOT_H=36; // pixels por slot de 30min
+  const COL_W=52;  // ancho de cada columna de día
+
+  return <div style={{background:C.bg}}>
+    {/* Nav semana */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
+      <button type="button" onClick={()=>{const d=new Date(weekBase);d.setDate(d.getDate()-7);setWeekBase(d);}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>‹</button>
+      <div style={{fontSize:13,fontWeight:700,color:C.text}}>
+        {MONTHS_S[weekDates[0].getMonth()]} {weekDates[0].getDate()} – {MONTHS_S[weekDates[6].getMonth()]} {weekDates[6].getDate()}, {weekDates[0].getFullYear()}
+      </div>
+      <button type="button" onClick={()=>{const d=new Date(weekBase);d.setDate(d.getDate()+7);setWeekBase(d);}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>›</button>
+    </div>
+
+    {/* Grid */}
+    <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 280px)"}}>
+      <div style={{minWidth:380}}>
+        {/* Header días */}
+        <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:C.bg,zIndex:10}}>
+          <div style={{width:40,flexShrink:0}}/>
+          {weekDates.map((d,i)=>{
+            const isToday=toStr(d)===todayStr();
+            return <div key={i} style={{flex:1,textAlign:"center",padding:"6px 2px",minWidth:COL_W}}>
+              <div style={{fontSize:10,color:C.muted}}>{DAYS[d.getDay()]}</div>
+              <div style={{width:26,height:26,borderRadius:"50%",background:isToday?C.accent:"transparent",color:isToday?"#000":C.text,fontWeight:isToday?900:400,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",margin:"2px auto 0"}}>{d.getDate()}</div>
+            </div>;
+          })}
+        </div>
+
+        {/* Filas de horas */}
+        {hours.map(hour=>[0,30].map(min=>{
+          const slotLabel=min===0?`${hour}:00`:"";
+          return <div key={`${hour}-${min}`} style={{display:"flex",borderBottom:`1px solid ${C.border}22`,minHeight:SLOT_H}}>
+            {/* Etiqueta hora */}
+            <div style={{width:40,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:6,paddingTop:2}}>
+              {min===0&&<span style={{fontSize:10,color:C.muted}}>{hour}:00</span>}
+            </div>
+            {/* Celdas por día */}
+            {weekDates.map((d,di)=>{
+              const ds=toStr(d);
+              const appt=getApptAtSlot(ds,hour,min);
+              const isWork=isWorkSlot(d,hour,min);
+              const isBlocked=staff&&(staff.blockedSlots||{})[ds]&&((staff.blockedSlots[ds].includes("morning")&&hour<13)||(staff.blockedSlots[ds].includes("afternoon")&&hour>=13));
+
+              return <div key={di} onClick={()=>{ if(appt) onApptClick(appt); else if(isWork&&!isBlocked) onSlotClick(d,hour,min,selectedStaffId); }}
+                style={{flex:1,minWidth:COL_W,borderLeft:`1px solid ${C.border}22`,position:"relative",background:!isWork?"#0a0c10":isBlocked?"#1a0a0a":"transparent",cursor:isWork&&!isBlocked?"pointer":"default"}}>
+                {appt&&<div style={{position:"absolute",inset:"1px 1px 1px 2px",background:(STATUS_C[appt.status]||C.cyan)+"33",border:`1.5px solid ${STATUS_C[appt.status]||C.cyan}`,borderRadius:6,padding:"2px 4px",overflow:"hidden",zIndex:2}}>
+                  <div style={{fontSize:10,fontWeight:700,color:STATUS_C[appt.status]||C.cyan,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{appt.clientName}</div>
+                  <div style={{fontSize:9,color:C.muted,whiteSpace:"nowrap",overflow:"hidden"}}>{appt.service}</div>
+                </div>}
+                {isBlocked&&!appt&&<div style={{position:"absolute",inset:0,background:`repeating-linear-gradient(45deg,${C.danger}11,${C.danger}11 4px,transparent 4px,transparent 8px)`,borderRadius:2}}/>}
+              </div>;
+            })}
+          </div>;
+        }))}
+      </div>
+    </div>
+
+    {/* Leyenda */}
+    <div style={{display:"flex",gap:12,padding:"8px 14px",flexWrap:"wrap",borderTop:`1px solid ${C.border}`}}>
+      {[["#4ecdc4","Confirmado"],["#f39c12","Pendiente"],["#8e44ad","Sin cita"],["#e74c3c","Bloqueado"],["#0a0c10","No labora"]].map(([col,label])=>(
+        <div key={label} style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:10,height:10,borderRadius:3,background:col}}/><span style={{fontSize:10,color:C.muted}}>{label}</span>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFIGURADOR DE PATRÓN DE HORARIO (por mes)
+// ═══════════════════════════════════════════════════════════════════
+function SchedulePatternModal({user, onClose, onSave}){
+  const [workDays,setWorkDays]=useState(user.workDays||[1,2,3,4,5]);
+  const [workStart,setWorkStart]=useState(user.workStart||"09:00");
+  const [workEnd,setWorkEnd]=useState(user.workEnd||"19:00");
+  const [yr,setYr]=useState(new Date().getFullYear());
+  const [mo,setMo]=useState(new Date().getMonth());
+  const [blocked,setBlocked]=useState(user.blockedSlots||{});
+  const [selDate,setSelDate]=useState(null);
+
+  const days=calDays(yr,mo);
+
+  const toggleDay=dow=>setWorkDays(p=>p.includes(dow)?p.filter(d=>d!==dow):[...p,dow].sort());
+
+  const toggleDayBlock=(ds)=>{
+    setBlocked(p=>{
+      const cur=p[ds];
+      if(cur===true) return {...p,[ds]:undefined};
+      return {...p,[ds]:true};
+    });
+  };
+
+  const applyPattern=()=>{
+    // Aplicar patrón a todo el mes visible
+    const newBlocked={...blocked};
+    days.forEach(d=>{
+      if(!d) return;
+      const ds=toStr(d);
+      if(!workDays.includes(d.getDay())){
+        newBlocked[ds]=true; // bloquear días no laborales
+      }
+    });
+    setBlocked(newBlocked);
+  };
+
+  const save=()=>{
+    const updated={...user,workDays,workStart,workEnd,blockedSlots:blocked};
+    onSave(updated);
+    onClose();
+  };
+
+  // Opciones de hora
+  const timeOpts=SLOTS.map(s=>({v:s,l:s}));
+
+  return <div style={S.overlay} onClick={onClose}>
+    <div style={{...S.modalBox,maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
+      <div style={{...S.row,marginBottom:14}}>
+        <div style={{fontSize:16,fontWeight:800,color:C.accent}}>🗓 Patrón de Horario — {user.name}</div>
+        <button type="button" onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+      </div>
+
+      {/* Días laborales */}
+      <div style={{fontSize:12,color:C.muted,marginBottom:8,fontWeight:700}}>DÍAS LABORALES</div>
+      <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+        {[["Do",0],["Lu",1],["Ma",2],["Mi",3],["Ju",4],["Vi",5],["Sa",6]].map(([l,d])=>(
+          <button type="button" key={d} onClick={()=>toggleDay(d)} style={{padding:"7px 13px",borderRadius:20,border:"none",fontSize:13,fontWeight:700,cursor:"pointer",background:workDays.includes(d)?C.cyan:"#1a2230",color:workDays.includes(d)?"#000":C.muted}}>{l}</button>
+        ))}
+      </div>
+
+      {/* Horario de trabajo */}
+      <div style={{fontSize:12,color:C.muted,marginBottom:8,fontWeight:700}}>HORARIO DE TRABAJO</div>
+      <div style={{display:"flex",gap:10,marginBottom:14}}>
+        <div style={{flex:1}}>
+          <label style={S.label}>Entrada</label>
+          <select style={S.input} value={workStart} onChange={e=>setWorkStart(e.target.value)}>
+            {SLOTS.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{flex:1}}>
+          <label style={S.label}>Salida</label>
+          <select style={S.input} value={workEnd} onChange={e=>setWorkEnd(e.target.value)}>
+            {SLOTS.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Botón aplicar patrón */}
+      <button type="button" onClick={applyPattern} style={{...S.btn("cyan"),width:"100%",marginBottom:14,padding:"10px"}}>
+        ✨ Aplicar patrón a {MONTHS[mo]}
+      </button>
+
+      {/* Calendario mensual para bloquear días específicos */}
+      <div style={{fontSize:12,color:C.muted,marginBottom:8,fontWeight:700}}>BLOQUEAR DÍAS ESPECÍFICOS</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <button type="button" onClick={()=>{if(mo===0){setMo(11);setYr(y=>y-1)}else setMo(m=>m-1)}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>‹</button>
+        <div style={{fontWeight:700,fontSize:14}}>{MONTHS[mo]} {yr}</div>
+        <button type="button" onClick={()=>{if(mo===11){setMo(0);setYr(y=>y+1)}else setMo(m=>m+1)}} style={{background:"none",border:"none",color:C.accent,fontSize:20,cursor:"pointer"}}>›</button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:6}}>
+        {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:C.muted,paddingBottom:3}}>{d}</div>)}
+        {days.map((d,i)=>{
+          if(!d) return <div key={i}/>;
+          const ds=toStr(d);
+          const isWork=workDays.includes(d.getDay());
+          const isBlocked=blocked[ds]===true;
+          const isPast=ds<todayStr();
+          return <div key={i} onClick={()=>!isPast&&toggleDayBlock(ds)}
+            style={{background:!isWork||isBlocked?"#1a0808":C.card,border:`1px solid ${!isWork||isBlocked?C.danger+"55":C.border}`,borderRadius:8,padding:"7px 0",textAlign:"center",fontSize:12,color:!isWork||isBlocked?C.danger:isPast?C.muted:C.text,cursor:isPast?"default":"pointer",opacity:isPast?0.4:1}}>
+            {d.getDate()}
+            {(!isWork||isBlocked)&&<div style={{fontSize:8}}>🔒</div>}
+          </div>;
+        })}
+      </div>
+
+      <div style={{fontSize:11,color:C.muted,marginBottom:14}}>Toca un día para bloquearlo/desbloquearlo individualmente</div>
+
+      {/* Vista previa de disponibilidad */}
+      <div style={{background:C.card2,borderRadius:12,padding:"10px 12px",marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:8}}>📊 Resumen del mes</div>
+        <div style={{display:"flex",gap:16}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:22,fontWeight:900,color:C.success}}>{days.filter(d=>d&&workDays.includes(d.getDay())&&!blocked[toStr(d)]).length}</div>
+            <div style={{fontSize:10,color:C.muted}}>Días disponibles</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:22,fontWeight:900,color:C.danger}}>{days.filter(d=>d&&(!workDays.includes(d.getDay())||blocked[toStr(d)])).length}</div>
+            <div style={{fontSize:10,color:C.muted}}>Días bloqueados</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:22,fontWeight:900,color:C.accent}}>
+              {(()=>{const start=parseTime(workStart),end=parseTime(workEnd),mins=end-start,slots=Math.floor(mins/30);return days.filter(d=>d&&workDays.includes(d.getDay())&&!blocked[toStr(d)]).length*slots;})()}
+            </div>
+            <div style={{fontSize:10,color:C.muted}}>Slots disponibles</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:10}}>
+        <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={onClose}>Cancelar</button>
+        <button type="button" style={{...S.btn(),flex:2}} onClick={save}>Guardar horario</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL NUEVA CITA / WALK-IN
+// ═══════════════════════════════════════════════════════════════════
+function NewApptModal({date, time, staffId, users, services, onClose, onSave}){
+  const [nm,setNm]=useState("");
+  const [ph,setPh]=useState("");
+  const [sv,setSv]=useState(services[0]?.id||"");
+  const [st,setSt]=useState(staffId||users[0]?.id||"");
+  const [dt,setDt]=useState(date||todayStr());
+  const [tm,setTm]=useState(time||"09:00");
+  const [status,setStatus]=useState("confirmado");
+  const [isWalkin,setIsWalkin]=useState(!date);
+
+  const save=async()=>{
+    if(!nm) return;
+    const svc=services.find(s=>s.id===sv);
+    const item={
+      id:"a"+Date.now(),
+      clientName:nm,
+      phone:ph,
+      service:svc?.name||"",
+      serviceId:sv,
+      staffId:st,
+      date:dt,
+      time:tm,
+      status:isWalkin?"walk_in":status,
+      duration:svc?.duration||30,
+    };
+    await DB.save("appointments",item.id,item);
+    onSave(item);
+    onClose();
+  };
+
+  return <Modal title={isWalkin?"⚡ Cliente sin cita":"📅 Nueva cita"} onClose={onClose} onSave={save}>
+    <div style={{display:"flex",gap:8,marginBottom:14}}>
+      <button type="button" onClick={()=>setIsWalkin(false)} style={{...S.btn(isWalkin?"ghost":"gold"),flex:1,fontSize:12}}>📅 Con cita</button>
+      <button type="button" onClick={()=>setIsWalkin(true)} style={{...S.btn(isWalkin?"cyan":"ghost"),flex:1,fontSize:12}}>⚡ Walk-in</button>
+    </div>
+    <Field label="Nombre del cliente" value={nm} onChange={setNm} placeholder="Carlos Pérez"/>
+    <Field label="Teléfono (opcional)" value={ph} onChange={setPh} placeholder="0981-000000"/>
+    <Field label="Servicio" value={sv} onChange={setSv} options={services.map(s=>({v:s.id,l:`${s.name} — $${s.price}`}))}/>
+    <Field label="Profesional" value={st} onChange={setSt} options={users.filter(u=>u.role==="barbero"||u.role==="tatuador").map(u=>({v:u.id,l:u.name}))}/>
+    {!isWalkin&&<>
+      <Field label="Fecha" value={dt} onChange={setDt} type="date"/>
+      <Field label="Hora" value={tm} onChange={setTm} options={SLOTS.map(s=>({v:s,l:s}))}/>
+      <Field label="Estado" value={status} onChange={setStatus} options={[{v:"confirmado",l:"Confirmado"},{v:"pendiente",l:"Pendiente"}]}/>
+    </>}
+    {isWalkin&&<div style={{background:"#8e44ad22",border:"1px solid #8e44ad44",borderRadius:10,padding:"10px 12px",fontSize:12,color:"#c39bd3"}}>
+      ⚡ El cliente llegó sin cita — se registrará con la hora actual ({new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})})
+    </div>}
+  </Modal>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VISTA PÚBLICA
+// ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// SISTEMA DE FIDELIZACIÓN
+// ═══════════════════════════════════════════════════════════════════
+
+// Tarjeta de sellos visual
+function StampCard({stamps, total=10, size="normal"}){
+  const isSmall = size==="small";
+  return <div style={{background:"linear-gradient(135deg,#1a1a0a,#111820)",border:`1.5px solid ${C.accent}44`,borderRadius:14,padding:isSmall?"10px 12px":"14px 16px"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isSmall?6:10}}>
+      <div style={{fontSize:isSmall?11:13,fontWeight:700,color:C.accent}}>🎫 Tarjeta de Fidelidad</div>
+      <div style={{fontSize:isSmall?11:13,color:C.muted}}>{stamps}/{total} sellos</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:`repeat(${total/2},1fr)`,gap:isSmall?4:6,marginBottom:isSmall?6:10}}>
+      {Array.from({length:total},(_,i)=>(
+        <div key={i} style={{width:"100%",aspectRatio:"1",borderRadius:8,background:i<stamps?"linear-gradient(135deg,#c9a84c,#f0c040)":C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isSmall?12:16,border:`1px solid ${i<stamps?C.accent:C.border}`,transition:"all .2s"}}>
+          {i<stamps?"✂️":""}
+        </div>
+      ))}
+    </div>
+    <div style={{background:stamps>=total?"#2ecc7122":"#1a2230",borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+      {stamps>=total
+        ? <span style={{color:C.success,fontWeight:700,fontSize:isSmall?11:13}}>🎉 ¡Servicio gratis disponible!</span>
+        : <span style={{color:C.muted,fontSize:isSmall?10:12}}>Te faltan <b style={{color:C.accent}}>{total-stamps}</b> sellos para tu servicio gratis</span>
+      }
+    </div>
+  </div>;
+}
+
+// Barra de puntos
+function PointsBar({points, level}){
+  const levels=[{name:"Bronze",min:0,max:100,color:"#cd7f32"},{name:"Silver",min:100,max:300,color:"#aaa"},{name:"Gold",min:300,max:700,color:C.accent},{name:"Platinum",min:700,max:1500,color:C.cyan}];
+  const cur=levels.find(l=>points>=l.min&&points<l.max)||levels[levels.length-1];
+  const pct=Math.min(100,((points-cur.min)/(cur.max-cur.min))*100);
+  return <div style={{background:C.card2||"#161e2a",borderRadius:14,padding:"12px 14px",border:`1px solid ${cur.color}44`}}>
+    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+      <div style={{fontWeight:700,color:cur.color,fontSize:13}}>⭐ {cur.name}</div>
+      <div style={{color:C.accent,fontWeight:900,fontSize:14}}>{points} pts</div>
+    </div>
+    <div style={{background:C.border,borderRadius:20,height:8,overflow:"hidden"}}>
+      <div style={{width:`${pct}%`,height:"100%",background:`linear-gradient(90deg,${cur.color},${C.accent})`,borderRadius:20,transition:"width .5s"}}/>
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+      <span style={{fontSize:10,color:C.muted}}>{cur.name}</span>
+      <span style={{fontSize:10,color:C.muted}}>{cur.max>1400?"MAX":cur.max+" pts → "+levels[levels.indexOf(cur)+1]?.name}</span>
+    </div>
+  </div>;
+}
+
+// Vista pública del cliente (perfil + fidelización)
+function ClientLoyaltyView({phone, clients, appointments, onBack}){
+  const client = clients.find(c=>c.phone===phone||c.email===phone);
+  if(!client) return <div style={{...S.app,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{fontSize:40,marginBottom:16}}>😕</div>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Cliente no encontrado</div>
+    <div style={{color:C.muted,fontSize:13,textAlign:"center",marginBottom:20}}>No encontramos una cuenta con ese teléfono</div>
+    <button type="button" style={{...S.btn(),width:"100%"}} onClick={onBack}>← Volver</button>
+  </div>;
+
+  const myAppts = appointments.filter(a=>a.clientName===client.name||a.phone===client.phone);
+  const stamps = client.stamps||0;
+  const points = client.points||0;
+
+  return <div style={S.app}>
+    <div style={{background:"linear-gradient(160deg,#080c10,#0d1a28)",padding:"28px 20px 20px",borderBottom:`1px solid ${C.border}`}}>
+      <button type="button" onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:13,cursor:"pointer",marginBottom:12}}>← Volver</button>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:56,height:56,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.cyan})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#000"}}>{client.name[0]}</div>
+        <div>
+          <div style={{fontSize:20,fontWeight:900}}>{client.name}</div>
+          <div style={{color:C.muted,fontSize:12}}>📞 {client.phone}</div>
+          <div style={{color:C.muted,fontSize:12}}>{client.visits||0} visitas totales</div>
+        </div>
+      </div>
+    </div>
+
+    <div style={{padding:"16px 14px 80px"}}>
+      <StampCard stamps={stamps}/>
+      <div style={{marginTop:12}}>
+        <PointsBar points={points}/>
+      </div>
+
+      {/* Historial de citas */}
+      <div style={{fontSize:14,fontWeight:700,color:C.accent,marginTop:16,marginBottom:10}}>📋 Mis citas</div>
+      {myAppts.length===0&&<div style={{color:C.muted,textAlign:"center",padding:20,fontSize:13}}>Sin citas registradas</div>}
+      {myAppts.slice().reverse().slice(0,5).map(a=>(
+        <div key={a.id} style={{...S.card,marginBottom:8}}>
+          <div style={S.row}>
+            <div><div style={{fontWeight:700,fontSize:13}}>{a.service}</div><div style={{color:C.muted,fontSize:11}}>{a.date} · {a.time}</div></div>
+            <span style={S.badge(STATUS_C[a.status]||C.muted)}>{STATUS_L[a.status]||a.status}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// Modal registro de nuevo cliente
+function ClientRegisterModal({onClose, onRegister}){
+  const [name,setName]=useState("");
+  const [phone,setPhone]=useState("");
+  const [email,setEmail]=useState("");
+  const [bday,setBday]=useState("");
+  const [err,setErr]=useState("");
+  const save=async()=>{
+    if(!name||!phone){setErr("Nombre y teléfono son obligatorios");return;}
+    const item={id:"c"+Date.now(),name,phone,email,birthday:bday,visits:0,lastVisit:"-",stamps:0,points:0,memberSince:new Date().toISOString().slice(0,10)};
+    await DB.save("clients",item.id,item);
+    onRegister(item);
+    onClose();
+  };
+  return <Modal title="✨ Crear perfil de cliente" onClose={onClose} onSave={save} saveLabel="Registrarme">
+    <div style={{background:C.accent+"11",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:C.muted}}>
+      Regístrate para acumular sellos y puntos en cada visita. Con <b style={{color:C.accent}}>10 servicios</b> obtienes <b style={{color:C.accent}}>1 gratis</b> 🎁
+    </div>
+    <Field label="Nombre completo *" value={name} onChange={setName} placeholder="Carlos Pérez"/>
+    <Field label="Teléfono *" value={phone} onChange={setPhone} placeholder="0981-000000"/>
+    <Field label="Email (opcional)" value={email} onChange={setEmail} placeholder="carlos@email.com"/>
+    <Field label="Fecha de cumpleaños (opcional)" value={bday} onChange={setBday} type="date"/>
+    {err&&<div style={{color:C.danger,fontSize:12,marginBottom:8}}>{err}</div>}
+  </Modal>;
+}
+
+function PublicView({services,appointments,users,clients,onBook,onGoAdmin,onRegisterClient}){
+  const [step,setStep]=useState(1);
+  const [pubTab,setPubTab]=useState("booking"); // booking | loyalty
+  const [loyaltyPhone,setLoyaltyPhone]=useState("");
+  const [loyaltyView,setLoyaltyView]=useState(false);
+  const [showRegister,setShowRegister]=useState(false);
+  const [svc,setSvc]=useState(null);
+  const [staff,setStaff]=useState(null);
+  const [date,setDate]=useState(null);
+  const [time,setTime]=useState(null);
+  const [name,setName]=useState("");
+  const [phone,setPhone]=useState("");
+  const [err,setErr]=useState("");
+  const [yr,setYr]=useState(new Date().getFullYear());
+  const [mo,setMo]=useState(new Date().getMonth());
+  const [viewMode,setViewMode]=useState("month"); // month | week
+
+  const staffList=users.filter(u=>u.role==="barbero"||u.role==="tatuador");
+
+  const slotAvailable=(d,slot)=>{
+    if(!staff) return false;
+    const ds=toStr(d);
+    if(ds<todayStr()) return false;
+    if(!(staff.workDays||[]).includes(d.getDay())) return false;
+    const slotMins=parseTime(slot);
+    const start=parseTime(staff.workStart||"09:00");
+    const end=parseTime(staff.workEnd||"19:00");
+    if(slotMins<start||slotMins>=end) return false;
+    if((staff.blockedSlots||{})[ds]) return false;
+    return !appointments.some(a=>a.staffId===staff.id&&a.date===ds&&a.time===slot);
+  };
+
+  const dayStatus=(d)=>{
+    if(!staff) return "na";
+    const ds=toStr(d),ts=todayStr();
+    if(ds<ts) return "past";
+    if(!(staff.workDays||[]).includes(d.getDay())) return "off";
+    if((staff.blockedSlots||{})[ds]) return "blocked";
+    const avSlots=SLOTS.filter(s=>slotAvailable(d,s));
+    return avSlots.length===0?"full":"avail";
+  };
+
+  const availSlots=useMemo(()=>{
+    if(!staff||!date) return {m:[],a:[]};
+    return {
+      m:SLOTS.filter(s=>parseTime(s)<13*60&&slotAvailable(date,s)),
+      a:SLOTS.filter(s=>parseTime(s)>=13*60&&slotAvailable(date,s)),
+    };
+  },[staff,date,appointments]);
+
+  const confirm=async()=>{
+    if(!name||!phone){setErr("Completa tu nombre y teléfono");return;}
+    const svcData=services.find(s=>s.id===svc?.id)||svc;
+    const appt={id:"a"+Date.now(),clientName:name,phone,service:svcData.name,serviceId:svcData.id,staffId:staff.id,date:toStr(date),time,status:"pendiente",duration:svcData.duration||30};
+    await DB.save("appointments",appt.id,appt);
+    onBook(appt);
+    setStep(5);
+  };
+
+  const days=calDays(yr,mo);
+  const weekDates=getWeekDates(date||new Date());
+  const DC={avail:C.card,off:"#080c10",blocked:"#1a0808",full:"#140808",past:"#080c10",na:"#080c10"};
+  const DTC={avail:C.text,off:C.border,blocked:C.danger,full:C.danger+"88",past:C.border,na:C.border};
+
+  return <div style={S.app}>
+    <div style={{background:"linear-gradient(160deg,#080c10,#0d1a28,#0a1a15)",padding:"28px 24px 20px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><Logo size={60}/></div>
+      <div style={{fontSize:26,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:4}}>TASECA</div>
+      <div style={{fontSize:11,color:C.cyan,letterSpacing:3}}>BARBER & TATTOO STUDIO</div>
+    </div>
+
+    {/* Tabs públicos */}
+    <div style={{display:"flex",borderBottom:`1px solid ${C.border}`}}>
+      {[["booking","📅 Agendar"],["loyalty","🎫 Mi tarjeta"]].map(([id,label])=>(
+        <button type="button" key={id} onClick={()=>setPubTab(id)} style={{flex:1,padding:"10px",background:"none",border:"none",borderBottom:`2px solid ${pubTab===id?C.accent:"transparent"}`,color:pubTab===id?C.accent:C.muted,fontWeight:pubTab===id?700:400,fontSize:13,cursor:"pointer"}}>{label}</button>
+      ))}
+    </div>
+
+    {/* VISTA FIDELIZACIÓN PÚBLICA */}
+    {pubTab==="loyalty"&&<div style={{padding:"16px 14px 80px"}}>
+      {!loyaltyView&&<>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎫</div>
+          <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Tu tarjeta de fidelidad</div>
+          <div style={{color:C.muted,fontSize:13}}>Acumula sellos y gana servicios gratis</div>
+        </div>
+        {/* Buscar perfil */}
+        <div style={{...S.card,marginBottom:12}}>
+          <div style={{fontWeight:700,color:C.accent,marginBottom:10,fontSize:13}}>🔍 Ya tengo cuenta</div>
+          <div style={{marginBottom:10}}>
+            <label style={S.label}>Ingresa tu teléfono</label>
+            <input style={S.input} type="tel" placeholder="0981-000000" value={loyaltyPhone} onChange={e=>setLoyaltyPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>
+          </div>
+          <button type="button" style={{...S.btn(),width:"100%"}} onClick={()=>setLoyaltyView(true)}>Ver mi tarjeta →</button>
+        </div>
+        {/* Registro */}
+        <div style={{...S.card,border:`1px solid ${C.cyan}44`}}>
+          <div style={{fontWeight:700,color:C.cyan,marginBottom:6,fontSize:13}}>✨ Quiero registrarme</div>
+          <div style={{color:C.muted,fontSize:12,marginBottom:10}}>Crea tu perfil y empieza a acumular sellos desde hoy</div>
+          <button type="button" style={{...S.btn("cyan"),width:"100%",color:"#000"}} onClick={()=>setShowRegister(true)}>Crear mi perfil gratuito</button>
+        </div>
+        {/* Info beneficios */}
+        <div style={{marginTop:16}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:10}}>BENEFICIOS</div>
+          {[["✂️","10 servicios = 1 gratis"],["⭐","Acumula puntos en cada visita"],["🎂","Descuento en tu cumpleaños"],["📋","Historial de tus citas"]].map(([icon,txt])=>(
+            <div key={txt} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <span style={{fontSize:18}}>{icon}</span>
+              <span style={{color:C.text,fontSize:13}}>{txt}</span>
+            </div>
+          ))}
+        </div>
+      </>}
+      {loyaltyView&&<ClientLoyaltyView phone={loyaltyPhone} clients={clients||[]} appointments={appointments} onBack={()=>setLoyaltyView(false)}/>}
+      {showRegister&&<ClientRegisterModal onClose={()=>setShowRegister(false)} onRegister={c=>{if(onRegisterClient) onRegisterClient(c);}}/>}
+    </div>}
+
+    <div style={{padding:"16px 14px 100px",display:pubTab==="booking"?"block":"none"}}>
+      {step<5&&<div style={{display:"flex",gap:4,marginBottom:16}}>{[1,2,3,4].map(i=><div key={i} style={{flex:1,height:3,borderRadius:3,background:step>i?C.accent:step===i?C.accent+"66":C.border}}/>)}</div>}
+
+      {/* PASO 1: SERVICIO */}
+      {step===1&&<>
+        <div style={{fontWeight:700,fontSize:16,color:C.accent,marginBottom:12}}>¿Qué servicio necesitas?</div>
+        {services.map(sv=><div key={sv.id} onClick={()=>setSvc(sv)} style={{background:svc?.id===sv.id?C.accent+"18":C.card,border:`1.5px solid ${svc?.id===sv.id?C.accent:C.border}`,borderRadius:13,padding:"12px 14px",marginBottom:8,cursor:"pointer"}}>
+          <div style={S.row}>
+            <div><div style={{fontWeight:700}}>{sv.name}</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>⏱ {sv.duration} min · <span style={S.badge(CAT_C[sv.category]||C.muted)}>{sv.category}</span></div></div>
+            <div style={{color:C.accent,fontWeight:900,fontSize:16}}>${sv.price}</div>
+          </div>
+        </div>)}
+        <button type="button" style={{...S.btn(),width:"100%",marginTop:8,opacity:svc?1:0.4}} disabled={!svc} onClick={()=>setStep(2)}>Continuar →</button>
+      </>}
+
+      {/* PASO 2: PROFESIONAL */}
+      {step===2&&<>
+        <div style={{fontWeight:700,fontSize:16,color:C.accent,marginBottom:4}}>Elige tu profesional</div>
+        <div style={{color:C.muted,fontSize:12,marginBottom:12}}>{svc?.name}</div>
+        {staffList.map(u=><div key={u.id} onClick={()=>{setStaff(u);setDate(null);setTime(null);}} style={{background:staff?.id===u.id?C.cyan+"18":C.card,border:`1.5px solid ${staff?.id===u.id?C.cyan:C.border}`,borderRadius:13,padding:"12px 14px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:40,height:40,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+            {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:u.name[0]}
+          </div>
+          <div><div style={{fontWeight:700}}>{u.name}</div><div style={{color:C.muted,fontSize:12}}>{ROLES[u.role]}</div></div>
+          {staff?.id===u.id&&<div style={{marginLeft:"auto",color:C.cyan,fontSize:18}}>✓</div>}
+        </div>)}
+        <div style={{display:"flex",gap:10}}>
+          <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(1)}>← Volver</button>
+          <button type="button" style={{...S.btn(),flex:2,opacity:staff?1:0.4}} disabled={!staff} onClick={()=>setStep(3)}>Continuar →</button>
+        </div>
+      </>}
+
+      {/* PASO 3: FECHA Y HORA */}
+      {step===3&&<>
+        <div style={{fontWeight:700,fontSize:16,color:C.accent,marginBottom:4}}>Elige fecha y hora</div>
+        <div style={{color:C.muted,fontSize:12,marginBottom:12}}>Con: <b style={{color:C.text}}>{staff?.name}</b></div>
+
+        {/* Toggle vista */}
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          <button type="button" onClick={()=>setViewMode("month")} style={{...S.btn(viewMode==="month"?"gold":"ghost"),flex:1,fontSize:12}}>📅 Mes</button>
+          <button type="button" onClick={()=>setViewMode("week")} style={{...S.btn(viewMode==="week"?"cyan":"ghost"),flex:1,fontSize:12}}>📋 Semana</button>
+        </div>
+
+        {/* VISTA MES */}
+        {viewMode==="month"&&<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <button type="button" onClick={()=>{if(mo===0){setMo(11);setYr(y=>y-1)}else setMo(m=>m-1)}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>‹</button>
+            <div style={{fontWeight:700,fontSize:14}}>{MONTHS[mo]} {yr}</div>
+            <button type="button" onClick={()=>{if(mo===11){setMo(0);setYr(y=>y+1)}else setMo(m=>m+1)}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>›</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+            {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:C.muted,paddingBottom:4}}>{d}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:12}}>
+            {days.map((d,i)=>{
+              if(!d) return <div key={i}/>;
+              const st=dayStatus(d),sel=date&&toStr(d)===toStr(date);
+              return <div key={i} onClick={()=>{if(st==="avail"){setDate(d);setTime(null);}}}
+                style={{background:sel?"linear-gradient(135deg,#c9a84c,#4ecdc4)":DC[st],border:`1px solid ${sel?"transparent":C.border}`,borderRadius:8,padding:"7px 0",textAlign:"center",cursor:st==="avail"?"pointer":"default",color:sel?"#000":DTC[st],fontWeight:sel?700:400,fontSize:12}}>
+                {d.getDate()}
+                {st==="avail"&&!sel&&<div style={{width:4,height:4,borderRadius:"50%",background:C.success,margin:"1px auto 0"}}/>}
+              </div>;
+            })}
+          </div>
+        </>}
+
+        {/* VISTA SEMANA simplificada */}
+        {viewMode==="week"&&<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <button type="button" onClick={()=>{const d=new Date(date||new Date());d.setDate(d.getDate()-7);setDate(d);}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>‹</button>
+            <div style={{fontWeight:700,fontSize:13}}>{MONTHS_S[weekDates[0].getMonth()]} {weekDates[0].getDate()} – {weekDates[6].getDate()}</div>
+            <button type="button" onClick={()=>{const d=new Date(date||new Date());d.setDate(d.getDate()+7);setDate(d);}} style={{background:"none",border:"none",color:C.accent,fontSize:22,cursor:"pointer"}}>›</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+            {weekDates.map((d,i)=>{
+              const st=dayStatus(d),sel=date&&toStr(d)===toStr(date),isToday=toStr(d)===todayStr();
+              return <div key={i} onClick={()=>{if(st==="avail"){setDate(d);setTime(null);}}} style={{textAlign:"center",cursor:st==="avail"?"pointer":"default"}}>
+                <div style={{fontSize:10,color:C.muted,marginBottom:4}}>{DAYS[d.getDay()]}</div>
+                <div style={{width:32,height:32,borderRadius:"50%",background:sel?"linear-gradient(135deg,#c9a84c,#4ecdc4)":isToday?C.border:"transparent",border:`1.5px solid ${sel?"transparent":st==="avail"?C.success:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:sel?"#000":st==="avail"?C.success:C.muted,margin:"0 auto",fontWeight:sel?700:400}}>{d.getDate()}</div>
+              </div>;
+            })}
+          </div>
+        </>}
+
+        {/* SLOTS DE HORA */}
+        {date&&<>
+          <div style={{fontWeight:700,color:C.cyan,marginTop:14,marginBottom:8}}>
+            Horarios — {date.getDate()} de {MONTHS[date.getMonth()]}
+          </div>
+          {availSlots.m.length>0&&<><div style={{fontSize:11,color:C.muted,marginBottom:6}}>🌅 Mañana</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
+              {availSlots.m.map(h=><div key={h} onClick={()=>setTime(h)} style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${time===h?C.accent:C.border}`,background:time===h?C.accent+"22":"transparent",color:time===h?C.accent:C.muted,cursor:"pointer",fontSize:12,textAlign:"center",fontWeight:time===h?700:400}}>{h}</div>)}
+            </div></>}
+          {availSlots.a.length>0&&<><div style={{fontSize:11,color:C.muted,marginBottom:6}}>🌆 Tarde</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
+              {availSlots.a.map(h=><div key={h} onClick={()=>setTime(h)} style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${time===h?C.accent:C.border}`,background:time===h?C.accent+"22":"transparent",color:time===h?C.accent:C.muted,cursor:"pointer",fontSize:12,textAlign:"center",fontWeight:time===h?700:400}}>{h}</div>)}
+            </div></>}
+          {availSlots.m.length===0&&availSlots.a.length===0&&<div style={{color:C.danger,fontSize:13,padding:10,textAlign:"center"}}>No hay horarios disponibles este día</div>}
+        </>}
+
+        <div style={{display:"flex",gap:10,marginTop:12}}>
+          <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(2)}>← Volver</button>
+          <button type="button" style={{...S.btn(),flex:2,opacity:(date&&time)?1:0.4}} disabled={!(date&&time)} onClick={()=>setStep(4)}>Continuar →</button>
+        </div>
+      </>}
+
+      {/* PASO 4: DATOS */}
+      {step===4&&<>
+        <div style={{fontWeight:700,fontSize:16,color:C.accent,marginBottom:12}}>Tus datos</div>
+        <div style={{...S.card,border:`1px solid ${C.accent}44`,marginBottom:14}}>
+          {[["Servicio",svc?.name],["Profesional",staff?.name],["Fecha",date?`${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`:""],["Hora",time]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+              <span style={{color:C.muted}}>{k}</span><span style={{fontWeight:700,color:k==="Hora"?C.accent:C.text}}>{v}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{marginBottom:11}}>
+          <label style={S.label}>Nombre completo</label>
+          <input style={S.input} type="text" placeholder="Carlos Pérez" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>
+        </div>
+        <div style={{marginBottom:11}}>
+          <label style={S.label}>Teléfono</label>
+          <input style={S.input} type="tel" placeholder="0981-000000" value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.preventDefault()}/>
+        </div>
+        {err&&<div style={{color:C.danger,fontSize:13,marginBottom:10}}>{err}</div>}
+        <div style={{display:"flex",gap:10}}>
+          <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={()=>setStep(3)}>← Volver</button>
+          <button type="button" style={{...S.btn(),flex:2}} onClick={confirm}>Confirmar ✓</button>
+        </div>
+      </>}
+
+      {/* PASO 5: ÉXITO */}
+      {step===5&&<div style={{textAlign:"center",padding:"28px 16px"}}>
+        <div style={{fontSize:56,marginBottom:12}}>🎉</div>
+        <div style={{fontSize:20,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:10}}>¡Cita agendada!</div>
+        <div style={{color:C.muted,fontSize:13,lineHeight:1.8,marginBottom:20}}>
+          <b style={{color:C.text}}>{name}</b>, tu cita de <b style={{color:C.text}}>{svc?.name}</b><br/>
+          con <b style={{color:C.text}}>{staff?.name}</b><br/>
+          el <b style={{color:C.accent}}>{date?.getDate()} de {MONTHS[date?.getMonth()]} a las {time}</b>
+        </div>
+        <button type="button" style={{...S.btn(),width:"100%"}} onClick={()=>{setStep(1);setSvc(null);setStaff(null);setDate(null);setTime(null);setName("");setPhone("");setErr("");}}>Agendar otra cita</button>
+      </div>}
+    </div>
+    </div>
+    <button type="button" onClick={onGoAdmin} style={{position:"fixed",bottom:18,right:14,background:C.card,border:`1px solid ${C.border}`,borderRadius:24,padding:"6px 12px",color:C.muted,fontSize:11,cursor:"pointer"}}>🔒 Staff</button>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════════
+function Login({users,onLogin,onBack}){
+  const [sel,setSel]=useState(null);
+  const [pin,setPin]=useState("");
+  const [err,setErr]=useState("");
+  const tap=(d)=>{
+    if(pin.length>=4) return;
+    const np=pin+d; setPin(np);
+    if(np.length===4) setTimeout(()=>{ if(np===sel.pin) onLogin(sel); else{setErr("PIN incorrecto");setPin("");} },200);
+  };
+  return <div style={{...S.app,display:"flex",flexDirection:"column"}}>
+    <div style={{padding:"40px 24px 20px",textAlign:"center"}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Logo size={50}/></div>
+      <div style={{fontSize:20,fontWeight:900,color:C.accent,marginBottom:4}}>Acceso Staff</div>
+      <div style={{fontSize:12,color:C.muted}}>Taseca · Barber & Tattoo</div>
+    </div>
+    <div style={{padding:"0 16px 40px",flex:1}}>
+      {!sel&&<>
+        <div style={{fontSize:13,color:C.muted,marginBottom:12,textAlign:"center"}}>Selecciona tu perfil</div>
+        {users.map(u=><div key={u.id} onClick={()=>{setSel(u);setPin("");setErr("");}} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,padding:"12px 14px",marginBottom:9,cursor:"pointer",display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:42,height:42,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+            {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:u.name[0]}
+          </div>
+          <div><div style={{fontWeight:700}}>{u.name}</div><div style={{color:C.muted,fontSize:12}}>{ROLES[u.role]}</div></div>
+          <div style={{marginLeft:"auto",color:C.muted,fontSize:16}}>›</div>
+        </div>)}
+        <button type="button" style={{...S.btn("ghost"),width:"100%",marginTop:8}} onClick={onBack}>← Inicio</button>
+      </>}
+      {sel&&<>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{width:50,height:50,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,margin:"0 auto 8px",overflow:"hidden"}}>
+            {sel.photo?<img src={sel.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:sel.name[0]}
+          </div>
+          <div style={{fontWeight:700,fontSize:15}}>{sel.name}</div>
+          <div style={{color:C.muted,fontSize:12,marginTop:10}}>Ingresa tu PIN</div>
+        </div>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:22}}>
+          {[0,1,2,3].map(i=><div key={i} style={{width:14,height:14,borderRadius:"50%",background:i<pin.length?C.accent:C.border}}/>)}
+        </div>
+        {err&&<div style={{color:C.danger,fontSize:12,textAlign:"center",marginBottom:10}}>{err}</div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:250,margin:"0 auto"}}>
+          {[1,2,3,4,5,6,7,8,9].map(n=><button type="button" key={n} onClick={()=>tap(String(n))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"15px",fontSize:20,fontWeight:700,color:C.text,cursor:"pointer",textAlign:"center"}}>{n}</button>)}
+          <button type="button" onClick={()=>{setSel(null);setPin("");setErr("");}} style={{background:"transparent",border:"none",fontSize:12,color:C.muted,cursor:"pointer",padding:"15px",textAlign:"center"}}>←</button>
+          <button type="button" onClick={()=>tap("0")} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"15px",fontSize:20,fontWeight:700,color:C.text,cursor:"pointer",textAlign:"center"}}>0</button>
+          <button type="button" onClick={()=>setPin(p=>p.slice(0,-1))} style={{background:"transparent",border:"none",fontSize:18,color:C.muted,cursor:"pointer",padding:"15px",textAlign:"center"}}>⌫</button>
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PANEL ADMIN
+// ═══════════════════════════════════════════════════════════════════
+function Admin({user,users,setUsers,services,setServices,products,setProducts,clients,setClients,appointments,setAppointments,sales,setSales,onLogout}){
+  if(!user) return null;
+  const tabs=[{id:"agenda",icon:"📅",label:"Agenda"},{id:"clientes",icon:"👥",label:"Clientes"},{id:"fidelidad",icon:"🎫",label:"Sellos"},{id:"catalogo",icon:"🛒",label:"Catálogo"},{id:"caja",icon:"💰",label:"Caja"},{id:"config",icon:"⚙️",label:"Config"}].filter(t=>(ROLE_TABS[user.role]||[]).includes(t.id)||t.id==="fidelidad");
+  const [tab,setTab]=useState("agenda");
+  const [sub,setSub]=useState("servicios");
+  const [modal,setModal]=useState(null);
+  const [schedUser,setSchedUser]=useState(null);
+  const [selectedStaff,setSelectedStaff]=useState(user.role==="barbero"||user.role==="tatuador"?user.id:users.find(u=>u.role==="barbero"||u.role==="tatuador")?.id||null);
+  const [newApptData,setNewApptData]=useState(null);
+  const [apptDetail,setApptDetail]=useState(null);
+
+  const closeM=()=>setModal(null);
+  const fab={position:"fixed",bottom:88,right:16,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:48,height:48,fontSize:22,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 16px #c9a84c55",zIndex:99};
+
+  const staffList=users.filter(u=>u.role==="barbero"||u.role==="tatuador");
+
+  // Modales
+  const ServiceModal=()=>{
+    const d=modal?.data||{};
+    const [nm,setNm]=useState(d.name||"");const [pr,setPr]=useState(d.price||"");const [du,setDu]=useState(d.duration||30);const [ca,setCa]=useState(d.category||"barberia");
+    const save=async()=>{if(!nm||!pr) return;const item={id:d.id||"s"+Date.now(),name:nm,price:Number(pr),duration:Number(du),category:ca};await DB.save("services",item.id,item);d.id?setServices(s=>s.map(x=>x.id===d.id?item:x)):setServices(s=>[...s,item]);closeM();};
+    return <Modal title={d.id?"Editar Servicio":"Nuevo Servicio"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Corte clásico"/>
+      <Field label="Precio ($)" value={pr} onChange={setPr} type="number" placeholder="15"/>
+      <Field label="Duración (min)" value={du} onChange={setDu} type="number" placeholder="30"/>
+      <Field label="Categoría" value={ca} onChange={setCa} options={[{v:"barberia",l:"Barbería"},{v:"tatuaje",l:"Tatuaje"}]}/>
+    </Modal>;
+  };
+
+  const ProductModal=()=>{
+    const d=modal?.data||{};
+    const [nm,setNm]=useState(d.name||"");const [pr,setPr]=useState(d.price||"");const [st,setSt]=useState(d.stock||0);
+    const save=async()=>{if(!nm||!pr) return;const item={id:d.id||"p"+Date.now(),name:nm,price:Number(pr),stock:Number(st)};await DB.save("products",item.id,item);d.id?setProducts(p=>p.map(x=>x.id===d.id?item:x)):setProducts(p=>[...p,item]);closeM();};
+    return <Modal title={d.id?"Editar Producto":"Nuevo Producto"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Pomada fijadora"/>
+      <Field label="Precio ($)" value={pr} onChange={setPr} type="number" placeholder="10"/>
+      <Field label="Stock" value={st} onChange={setSt} type="number" placeholder="20"/>
+    </Modal>;
+  };
+
+  const ClientModal=()=>{
+    const d=modal?.data||{};
+    const [nm,setNm]=useState(d.name||"");const [ph,setPh]=useState(d.phone||"");
+    const save=async()=>{if(!nm) return;const item={id:d.id||"c"+Date.now(),name:nm,phone:ph,visits:d.visits||0,lastVisit:d.lastVisit||"-"};await DB.save("clients",item.id,item);d.id?setClients(c=>c.map(x=>x.id===d.id?item:x)):setClients(c=>[...c,item]);closeM();};
+    return <Modal title={d.id?"Editar Cliente":"Nuevo Cliente"} onClose={closeM} onSave={save}>
+      <Field label="Nombre completo" value={nm} onChange={setNm} placeholder="Carlos Méndez"/>
+      <Field label="Teléfono" value={ph} onChange={setPh} placeholder="0981-000000"/>
+    </Modal>;
+  };
+
+  const SaleModal=()=>{
+    const [cl,setCl]=useState("");const [it,setIt]=useState("");const [to,setTo]=useState("");const [mt,setMt]=useState("efectivo");
+    const save=async()=>{if(!cl||!to) return;const item={id:"v"+Date.now(),client:cl,items:it.split(",").map(i=>i.trim()),total:Number(to),method:mt,date:new Date().toISOString().slice(0,10)};await DB.save("sales",item.id,item);setSales(s=>[...s,item]);closeM();};
+    return <Modal title="Nueva Venta" onClose={closeM} onSave={save}>
+      <Field label="Cliente" value={cl} onChange={setCl} placeholder="Nombre"/>
+      <Field label="Items (separar con coma)" value={it} onChange={setIt} placeholder="Corte, Pomada"/>
+      <Field label="Total ($)" value={to} onChange={setTo} type="number" placeholder="25"/>
+      <Field label="Método" value={mt} onChange={setMt} options={[{v:"efectivo",l:"Efectivo"},{v:"tarjeta",l:"Tarjeta"},{v:"transferencia",l:"Transferencia"}]}/>
+    </Modal>;
+  };
+
+  const UserModal=()=>{
+    const d=modal?.data||{};
+    const [nm,setNm]=useState(d.name||"");const [ro,setRo]=useState(d.role||"barbero");const [em,setEm]=useState(d.email||"");const [pi,setPi]=useState(d.pin||"");
+    const save=async()=>{if(!nm) return;const item={...(d.id?d:{id:"u"+Date.now(),photo:null,workDays:[1,2,3,4,5],workStart:"09:00",workEnd:"19:00",blockedSlots:{}}),name:nm,role:ro,email:em,pin:pi};await DB.save("users",item.id,item);d.id?setUsers(u=>u.map(x=>x.id===d.id?item:x)):setUsers(u=>[...u,item]);closeM();};
+    return <Modal title={d.id?"Editar Usuario":"Nuevo Usuario"} onClose={closeM} onSave={save}>
+      <Field label="Nombre" value={nm} onChange={setNm} placeholder="Juan Barbero"/>
+      <Field label="Rol" value={ro} onChange={setRo} options={[{v:"admin",l:"Administrador"},{v:"barbero",l:"Barbero"},{v:"tatuador",l:"Tatuador/a"},{v:"recepcionista",l:"Recepcionista"}]}/>
+      <Field label="Email" value={em} onChange={setEm} placeholder="usuario@shop.com"/>
+      <Field label="PIN (4 dígitos)" value={pi} onChange={setPi} type="number" placeholder="1234"/>
+    </Modal>;
+  };
+
+  const PhotoBtn=({u})=>{
+    const ref=useRef();
+    return <><input type="file" accept="image/*" ref={ref} style={{display:"none"}} onChange={e=>{
+      if(!e.target.files[0]) return;
+      const r=new FileReader();
+      r.onload=async ev=>{const updated={...u,photo:ev.target.result};await DB.save("users",u.id,updated);setUsers(us=>us.map(x=>x.id===u.id?updated:x));};
+      r.readAsDataURL(e.target.files[0]);
+    }}/>
+    <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"5px 11px",fontSize:11}} onClick={()=>ref.current.click()}>📷</button></>;
+  };
+
+  const totalV=sales.reduce((a,s)=>a+s.total,0);
+
+  return <div style={{...S.app,paddingBottom:80}}>
+    {/* HEADER */}
+    <div style={{background:"linear-gradient(135deg,#0d1520,#080c10)",padding:"12px 14px 10px",borderBottom:`1px solid ${C.border}`}}>
+      <div style={S.row}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <Logo size={26}/>
+          <div>
+            <div style={{fontSize:16,fontWeight:900,background:"linear-gradient(90deg,#c9a84c,#4ecdc4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TASECA</div>
+            <div style={{fontSize:10,color:C.muted}}>Hola <b style={{color:C.accent}}>{user.name}</b></div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button type="button" onClick={()=>setModal({type:"walkin"})} style={{...S.btn("cyan"),padding:"6px 12px",fontSize:11,color:"#000"}}>⚡ Walk-in</button>
+          <button type="button" onClick={onLogout} style={{background:C.border,border:"none",borderRadius:9,padding:"5px 10px",color:C.muted,fontSize:11,cursor:"pointer"}}>Salir</button>
+        </div>
+      </div>
+    </div>
+
+    <div style={{padding:"12px 12px"}}>
+      {/* AGENDA — Calendario tipo imagen */}
+      {tab==="agenda"&&<>
+        {/* Selector de staff */}
+        <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:4}}>
+          <button type="button" onClick={()=>setSelectedStaff(null)} style={{...S.btn(selectedStaff===null?"gold":"ghost"),padding:"5px 12px",fontSize:11,whiteSpace:"nowrap"}}>Todos</button>
+          {staffList.map(u=><button type="button" key={u.id} onClick={()=>setSelectedStaff(u.id)} style={{...S.btn(selectedStaff===u.id?"cyan":"ghost"),padding:"5px 12px",fontSize:11,whiteSpace:"nowrap",color:selectedStaff===u.id?"#000":C.muted}}>{u.name}</button>)}
+        </div>
+
+        <AgendaCalendar
+          appointments={appointments}
+          users={users}
+          services={services}
+          selectedStaffId={selectedStaff}
+          onSlotClick={(date,hour,min,staffId)=>{
+            setNewApptData({date:toStr(date),time:`${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`,staffId});
+          }}
+          onApptClick={(appt)=>setApptDetail(appt)}
+        />
+
+        <button type="button" style={fab} onClick={()=>setModal({type:"appt",data:{}})}>+</button>
+      </>}
+
+      {/* CLIENTES */}
+      {tab==="clientes"&&<>
+        <div style={{fontSize:16,fontWeight:700,color:C.accent,marginBottom:12}}>👥 Clientes</div>
+        {clients.map(c=><div key={c.id} style={S.card}>
+          <div style={S.row}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:40,height:40,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{c.name[0]}</div>
+              <div><div style={{fontWeight:700}}>{c.name}</div><div style={{color:C.muted,fontSize:12}}>📞 {c.phone}</div></div>
+            </div>
+            <span style={S.badge(C.accent)}>{c.visits} visitas</span>
+          </div>
+          <div style={{marginTop:5,color:C.muted,fontSize:11}}>Última: {c.lastVisit}</div>
+          <div style={{marginTop:7,display:"flex",gap:7}}>
+            <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={()=>setModal({type:"client",data:c})}>Editar</button>
+            <button type="button" style={{...S.btn("danger"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={async()=>{await DB.del("clients",c.id);setClients(p=>p.filter(x=>x.id!==c.id));}}>Eliminar</button>
+          </div>
+        </div>)}
+        <button type="button" style={fab} onClick={()=>setModal({type:"client",data:{}})}>+</button>
+      </>}
+
+      {/* CATÁLOGO */}
+      {tab==="catalogo"&&<>
+        <div style={{fontSize:16,fontWeight:700,color:C.accent,marginBottom:12}}>🛒 Catálogo</div>
+        <div style={{display:"flex",gap:7,marginBottom:12}}>
+          {["servicios","productos"].map(t=><button type="button" key={t} style={{padding:"5px 14px",borderRadius:20,border:"none",background:sub===t?C.accent:C.border,color:sub===t?"#000":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={()=>setSub(t)}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
+        </div>
+        {sub==="servicios"&&services.map(sv=><div key={sv.id} style={S.card}>
+          <div style={S.row}>
+            <div><div style={{fontWeight:700}}>{sv.name}</div><div style={{color:C.muted,fontSize:12}}>⏱ {sv.duration} min</div></div>
+            <div style={{textAlign:"right"}}><div style={{color:C.accent,fontWeight:900,fontSize:15}}>${sv.price}</div><span style={S.badge(CAT_C[sv.category]||"#888")}>{sv.category}</span></div>
+          </div>
+          <div style={{marginTop:7,display:"flex",gap:7}}>
+            <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={()=>setModal({type:"service",data:sv})}>Editar</button>
+            <button type="button" style={{...S.btn("danger"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={async()=>{await DB.del("services",sv.id);setServices(p=>p.filter(x=>x.id!==sv.id));}}>Eliminar</button>
+          </div>
+        </div>)}
+        {sub==="productos"&&products.map(p=><div key={p.id} style={S.card}>
+          <div style={S.row}>
+            <div><div style={{fontWeight:700}}>{p.name}</div><div style={{color:p.stock<5?C.danger:C.muted,fontSize:12}}>📦 {p.stock}</div></div>
+            <div style={{color:C.accent,fontWeight:900,fontSize:15}}>${p.price}</div>
+          </div>
+          <div style={{marginTop:7,display:"flex",gap:7}}>
+            <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={()=>setModal({type:"product",data:p})}>Editar</button>
+            <button type="button" style={{...S.btn("danger"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={async()=>{await DB.del("products",p.id);setProducts(pp=>pp.filter(x=>x.id!==p.id));}}>Eliminar</button>
+          </div>
+        </div>)}
+        <button type="button" style={fab} onClick={()=>setModal({type:sub==="servicios"?"service":"product",data:{}})}>+</button>
+      </>}
+
+      {/* FIDELIDAD */}
+      {tab==="fidelidad"&&<>
+        <div style={{fontSize:16,fontWeight:700,color:C.accent,marginBottom:12}}>🎫 Programa de Fidelidad</div>
+
+        {/* Stats generales */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+          {[
+            [clients.filter(c=>c.stamps>=10).length,"🎁","Premios listos",C.success],
+            [clients.reduce((a,c)=>a+(c.stamps||0),0),"✂️","Total sellos",C.accent],
+            [clients.filter(c=>(c.stamps||0)>0).length,"⭐","Activos",C.cyan],
+          ].map(([val,icon,label,col])=>(
+            <div key={label} style={{background:col+"18",border:`1px solid ${col}33`,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+              <div style={{fontSize:20}}>{icon}</div>
+              <div style={{fontSize:18,fontWeight:900,color:col}}>{val}</div>
+              <div style={{fontSize:9,color:C.muted}}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lista clientes con sellos */}
+        {clients.map(client=>{
+          const stamps=client.stamps||0;
+          const points=client.points||0;
+          const hasReward=stamps>=10;
+          return <div key={client.id} style={{...S.card,border:`1px solid ${hasReward?C.success+"66":C.border}`,marginBottom:9}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <div style={{width:38,height:38,borderRadius:"50%",background:hasReward?"linear-gradient(135deg,#2ecc71,#27ae60)":C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:hasReward?"#fff":"#c9a84c",flexShrink:0}}>{client.name[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14}}>{client.name}</div>
+                <div style={{color:C.muted,fontSize:11}}>{client.phone} · {client.visits||0} visitas</div>
+              </div>
+              {hasReward&&<div style={{background:C.success+"22",border:`1px solid ${C.success}`,borderRadius:20,padding:"3px 10px",fontSize:11,color:C.success,fontWeight:700}}>🎁 Premio</div>}
+            </div>
+
+            {/* Mini stamp card */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(10,1fr)",gap:3,marginBottom:8}}>
+              {Array.from({length:10},(_,i)=>(
+                <div key={i} style={{aspectRatio:"1",borderRadius:5,background:i<stamps?"linear-gradient(135deg,#c9a84c,#f0c040)":C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9}}>
+                  {i<stamps?"✂️":""}
+                </div>
+              ))}
+            </div>
+
+            {/* Puntos */}
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:12}}>
+              <span style={{color:C.muted}}>⭐ Puntos</span>
+              <span style={{color:C.accent,fontWeight:700}}>{points} pts</span>
+            </div>
+
+            {/* Botones acción */}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button type="button" style={{...S.btn("gold"),padding:"5px 10px",fontSize:11,color:"#000"}} onClick={async()=>{
+                const ns=Math.min((stamps+1),10);
+                const np=points+10;
+                const updated={...client,stamps:ns,points:np,visits:(client.visits||0)+1,lastVisit:new Date().toISOString().slice(0,10)};
+                await DB.save("clients",client.id,updated);
+                setClients(p=>p.map(x=>x.id===client.id?updated:x));
+              }}>+ Sello ✂️</button>
+              {hasReward&&<button type="button" style={{...S.btn("cyan"),padding:"5px 10px",fontSize:11,color:"#000"}} onClick={async()=>{
+                const updated={...client,stamps:0,points:points+50};
+                await DB.save("clients",client.id,updated);
+                setClients(p=>p.map(x=>x.id===client.id?updated:x));
+                alert(`¡Premio canjeado para ${client.name}! Se reiniciaron los sellos.`);
+              }}>🎁 Canjear premio</button>}
+              <button type="button" style={{...S.btn("ghost"),padding:"5px 10px",fontSize:11}} onClick={async()=>{
+                if(!confirm("¿Reiniciar sellos de "+client.name+"?")) return;
+                const updated={...client,stamps:0};
+                await DB.save("clients",client.id,updated);
+                setClients(p=>p.map(x=>x.id===client.id?updated:x));
+              }}>Reiniciar</button>
+            </div>
+          </div>;
+        })}
+        {clients.length===0&&<div style={{color:C.muted,textAlign:"center",padding:30,fontSize:13}}>Sin clientes registrados aún</div>}
+      </>}
+
+      {/* CAJA */}
+      {tab==="caja"&&<>
+        <div style={{fontSize:16,fontWeight:700,color:C.accent,marginBottom:12}}>💰 Caja & Ventas</div>
+        <div style={{background:C.accent+"18",border:`1px solid ${C.accent}44`,borderRadius:13,padding:"13px 14px",marginBottom:11}}>
+          <div style={{color:C.muted,fontSize:11}}>Total recaudado</div>
+          <div style={{color:C.accent,fontSize:26,fontWeight:900}}>${totalV}</div>
+          <div style={{color:C.muted,fontSize:11}}>{sales.length} ventas</div>
+        </div>
+        {sales.map(s=><div key={s.id} style={S.card}>
+          <div style={S.row}>
+            <div><div style={{fontWeight:700}}>{s.client}</div><div style={{color:C.muted,fontSize:11}}>{(s.items||[]).join(", ")}</div></div>
+            <div style={{textAlign:"right"}}><div style={{color:C.accent,fontWeight:900}}>${s.total}</div><span style={S.badge(C.success)}>{s.method}</span></div>
+          </div>
+          <div style={{marginTop:4,color:C.muted,fontSize:11}}>📆 {s.date}</div>
+        </div>)}
+        <button type="button" style={fab} onClick={()=>setModal({type:"sale",data:{}})}>+</button>
+      </>}
+
+      {/* CONFIG */}
+      {tab==="config"&&user.role==="admin"&&<>
+        <div style={{fontSize:16,fontWeight:700,color:C.accent,marginBottom:12}}>⚙️ Configuración</div>
+        <div style={{...S.card,border:`1.5px solid ${C.cyan}44`,marginBottom:14}}>
+          <div style={{fontWeight:700,color:C.cyan,marginBottom:6}}>🔥 Firebase</div>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:C.success}}/>
+            <span style={{color:C.success,fontSize:12,fontWeight:700}}>Conectado — datos en tiempo real</span>
+          </div>
+        </div>
+        <div style={{fontWeight:700,color:C.cyan,marginBottom:10}}>👤 Personal & Horarios</div>
+        {users.map(u=><div key={u.id} style={S.card}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:42,height:42,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+              {u.photo?<img src={u.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:u.name[0]}
+            </div>
+            <div>
+              <div style={{fontWeight:700}}>{u.name}</div>
+              <div style={{color:C.muted,fontSize:12}}>{ROLES[u.role]}</div>
+              <div style={{color:C.muted,fontSize:10}}>
+                {(u.workDays||[]).map(d=>DAYS[d]).join("·")} · {u.workStart||"09:00"}-{u.workEnd||"19:00"}
+              </div>
+            </div>
+          </div>
+          <div style={{marginTop:8,display:"flex",gap:7,flexWrap:"wrap"}}>
+            <PhotoBtn u={u}/>
+            <button type="button" style={{...S.btn("ghost"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={()=>setModal({type:"user",data:u})}>Editar</button>
+            <button type="button" style={{...S.btn("cyan"),width:"auto",padding:"4px 10px",fontSize:11,color:"#000"}} onClick={()=>setSchedUser(u)}>🗓 Patrón</button>
+            <button type="button" style={{...S.btn("danger"),width:"auto",padding:"4px 10px",fontSize:11}} onClick={async()=>{await DB.del("users",u.id);setUsers(p=>p.filter(x=>x.id!==u.id));}}>Eliminar</button>
+          </div>
+        </div>)}
+        <button type="button" style={{...S.btn(),width:"100%",padding:"10px"}} onClick={()=>setModal({type:"user",data:{}})}>+ Agregar usuario</button>
+      </>}
+    </div>
+
+    {/* TAB BAR */}
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#0d1520",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:100}}>
+      {tabs.map(t=><button type="button" key={t.id} style={{flex:1,padding:"9px 0 7px",background:"none",border:"none",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}} onClick={()=>setTab(t.id)}>
+        <span style={{fontSize:18}}>{t.icon}</span>
+        <span style={{fontSize:9,fontWeight:tab===t.id?700:400}}>{t.label}</span>
+      </button>)}
+    </div>
+
+    {/* MODALES */}
+    {modal?.type==="service"&&<ServiceModal/>}
+    {modal?.type==="product"&&<ProductModal/>}
+    {modal?.type==="client"&&<ClientModal/>}
+    {modal?.type==="sale"&&<SaleModal/>}
+    {modal?.type==="user"&&<UserModal/>}
+    {(modal?.type==="appt"||modal?.type==="walkin")&&<NewApptModal
+      date={modal?.data?.date||null} time={modal?.data?.time||null} staffId={modal?.data?.staffId||selectedStaff}
+      users={users} services={services}
+      onClose={closeM}
+      onSave={appt=>{setAppointments(p=>[...p,appt]);closeM();}}
+    />}
+
+    {/* Nueva cita desde slot del calendario */}
+    {newApptData&&<NewApptModal
+      date={newApptData.date} time={newApptData.time} staffId={newApptData.staffId}
+      users={users} services={services}
+      onClose={()=>setNewApptData(null)}
+      onSave={appt=>{setAppointments(p=>[...p,appt]);setNewApptData(null);}}
+    />}
+
+    {/* Detalle cita */}
+    {apptDetail&&<div style={S.overlay} onClick={()=>setApptDetail(null)}>
+      <div style={S.modalBox} onClick={e=>e.stopPropagation()}>
+        <div style={{...S.row,marginBottom:14}}>
+          <div style={{fontSize:16,fontWeight:800,color:STATUS_C[apptDetail.status]||C.accent}}>{STATUS_L[apptDetail.status]||apptDetail.status}</div>
+          <button type="button" onClick={()=>setApptDetail(null)} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:20,fontWeight:900,marginBottom:4}}>{apptDetail.clientName}</div>
+        <div style={{color:C.muted,fontSize:13,marginBottom:12}}>{apptDetail.phone}</div>
+        {[["Servicio",apptDetail.service],["Profesional",users.find(u=>u.id===apptDetail.staffId)?.name||"—"],["Fecha",apptDetail.date],["Hora",apptDetail.time],["Duración",`${apptDetail.duration||30} min`]].map(([k,v])=>(
+          <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>
+            <span style={{color:C.muted}}>{k}</span><span style={{fontWeight:700}}>{v}</span>
+          </div>
+        ))}
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <button type="button" style={{...S.btn("cyan"),flex:1,color:"#000",fontSize:12}} onClick={async()=>{
+            const updated={...apptDetail,status:"confirmado"};
+            await DB.save("appointments",updated.id,updated);
+            setAppointments(p=>p.map(x=>x.id===updated.id?updated:x));
+            // Auto-sumar sello y puntos al cliente
+            const matchClient=clients.find(c=>c.name===apptDetail.clientName||c.phone===apptDetail.phone);
+            if(matchClient){
+              const ns=Math.min((matchClient.stamps||0)+1,10);
+              const updatedClient={...matchClient,stamps:ns,points:(matchClient.points||0)+10,visits:(matchClient.visits||0)+1,lastVisit:new Date().toISOString().slice(0,10)};
+              await DB.save("clients",matchClient.id,updatedClient);
+              setClients(p=>p.map(x=>x.id===matchClient.id?updatedClient:x));
+            }
+            setApptDetail(null);
+          }}>✓ Confirmar (+sello)</button>
+          <button type="button" style={{...S.btn("danger"),flex:1,fontSize:12}} onClick={async()=>{
+            await DB.del("appointments",apptDetail.id);
+            setAppointments(p=>p.filter(x=>x.id!==apptDetail.id));
+            setApptDetail(null);
+          }}>Eliminar</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Modal patrón de horario */}
+    {schedUser&&<SchedulePatternModal user={schedUser} onClose={()=>setSchedUser(null)} onSave={async(updated)=>{
+      await DB.save("users",updated.id,updated);
+      setUsers(u=>u.map(x=>x.id===updated.id?updated:x));
+      setSchedUser(null);
+    }}/>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ROOT
+// ═══════════════════════════════════════════════════════════════════
+function App(){
+  const [screen,setScreen]=useState("loading");
+  const [user,setUser]=useState(null);
+  const [users,setUsers]=useState([]);
+  const [services,setServices]=useState([]);
+  const [products,setProducts]=useState([]);
+  const [clients,setClients]=useState([]);
+  const [appointments,setAppointments]=useState([]);
+  const [sales,setSales]=useState([]);
+
+  const initDB=useCallback(async()=>{
+    try{
+      let u=await DB.getAll("users");
+      if(u.length===0){for(const x of DEF_USERS) await DB.save("users",x.id,x);u=DEF_USERS;}
+      setUsers(u);
+      let sv=await DB.getAll("services");
+      if(sv.length===0){for(const x of DEF_SERVICES) await DB.save("services",x.id,x);sv=DEF_SERVICES;}
+      setServices(sv);
+      setProducts(await DB.getAll("products"));
+      setClients(await DB.getAll("clients"));
+      setAppointments(await DB.getAll("appointments"));
+      setSales(await DB.getAll("sales"));
+      setScreen("public");
+    }catch(e){console.error(e);setScreen("public");}
+  },[]);
+
+  useEffect(()=>{
+    if(window._firebaseReady) initDB();
+    else window.addEventListener("firebaseReady",initDB,{once:true});
+    return()=>window.removeEventListener("firebaseReady",initDB);
+  },[initDB]);
+
+  if(screen==="loading") return <div style={{...S.app,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+    <Logo size={70}/><div style={{color:C.accent,fontSize:18,fontWeight:900,marginTop:16,letterSpacing:4}}>TASECA</div>
+    <div style={{color:C.muted,fontSize:12,marginTop:8}}>Conectando...</div>
+  </div>;
+
+  if(screen==="login") return <Login users={users} onLogin={u=>{setUser(u);setScreen("admin");}} onBack={()=>setScreen("public")}/>;
+  if(screen==="admin") return <Admin user={user} users={users} setUsers={setUsers} services={services} setServices={setServices} products={products} setProducts={setProducts} clients={clients} setClients={setClients} appointments={appointments} setAppointments={setAppointments} sales={sales} setSales={setSales} onLogout={()=>{setUser(null);setScreen("public");}}/>;
+  return <PublicView services={services} appointments={appointments} users={users} clients={clients} onBook={a=>setAppointments(p=>[...p,a])} onGoAdmin={()=>setScreen("login")} onRegisterClient={c=>{setClients(p=>[...p,c]);}}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
