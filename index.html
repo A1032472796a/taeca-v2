@@ -7463,7 +7463,8 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
         fr.onload = function(ev){
           var upd = Object.assign({}, cfg, {businessLogo: ev.target.result});
           setCfg(upd);
-          DB.save("config", upd.id||"cfg", upd).catch(function(err){console.error(err);});
+          var cfgId = upd.id || (window._companyId ? "cfg_"+window._companyId : "cfg");
+          DB.save("config", cfgId, Object.assign(upd,{id:cfgId})).catch(function(err){console.error(err);});
         };
         fr.readAsDataURL(e.target.files[0]);
       }
@@ -8062,7 +8063,7 @@ function App() {
           return DB.all("services");
         case 6:
           sv = _context30.v;
-          if (!(sv.length === 0)) {
+          if (!(sv.length === 0 && !window._companyId)) {
             _context30.n = 10;
             break;
           }
