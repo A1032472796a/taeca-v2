@@ -191,6 +191,11 @@ function toDb(c, o) {
     d.stamps_on = d.stampsOn;
     delete d.stampsOn;
   }
+  if (c === "config") {
+    if (d.businessName !== undefined) { d.business_name = d.businessName; delete d.businessName; }
+    if (d.businessSubtitle !== undefined) { d.business_subtitle = d.businessSubtitle; delete d.businessSubtitle; }
+    if (d.businessLogo !== undefined) { d.business_logo = d.businessLogo; delete d.businessLogo; }
+  }
   if (c === "appointments") {
     if (d.stId !== undefined) {
       d.st_id = d.stId;
@@ -239,6 +244,11 @@ function fromDb(c, o) {
   if (c === "config" && d.stamps_on !== undefined) {
     d.stampsOn = !!d.stamps_on;
     delete d.stamps_on;
+  }
+  if (c === "config") {
+    if (d.business_name !== undefined) { d.businessName = d.business_name; delete d.business_name; }
+    if (d.business_subtitle !== undefined) { d.businessSubtitle = d.business_subtitle; delete d.business_subtitle; }
+    if (d.business_logo !== undefined) { d.businessLogo = d.business_logo; delete d.business_logo; }
   }
   if (c === "appointments" && d.st_id !== undefined) {
     d.stId = d.st_id;
@@ -417,7 +427,10 @@ var C = {
 /* ─── DEFAULTS ──────────────────────────────────────────────────── */
 var DEF_CFG = {
   id: "cfg",
-  stampsOn: true
+  stampsOn: true,
+  businessName: "",
+  businessSubtitle: "",
+  businessLogo: null
 };
 var DEF_USERS = [{
   id: "u1",
@@ -2890,35 +2903,23 @@ function Public(p) {
       textAlign: "center",
       borderBottom: "1px solid " + C.border
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "center",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(Logo, {
-    size: 64
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 26,
-      fontWeight: 900,
-      letterSpacing: 5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "gradient-text",
-    style: {
-      background: "linear-gradient(90deg,#c9a84c,#4ecdc4)",
-      WebkitBackgroundClip: "text",
-      WebkitTextFillColor: "transparent"
-    }
-  }, "TASECA")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: C.cyan,
-      letterSpacing: 4,
-      marginTop: 2
-    }
-  }, "BARBER & TATTOO STUDIO")), /*#__PURE__*/React.createElement("div", {
+  },
+  /* Logo — custom o default */
+  /*#__PURE__*/React.createElement("div", {style: {display: "flex", justifyContent: "center", marginBottom: 10}},
+    cfg && cfg.businessLogo
+      ? /*#__PURE__*/React.createElement("img", {src: cfg.businessLogo, style: {width: 72, height: 72, borderRadius: 16, objectFit: "cover", border: "2px solid " + C.accent + "44"}})
+      : /*#__PURE__*/React.createElement(Logo, {size: 64})
+  ),
+  /* Nombre — custom o TASECA */
+  /*#__PURE__*/React.createElement("div", {style: {fontSize: 26, fontWeight: 900, letterSpacing: cfg && cfg.businessName ? 2 : 5}},
+    cfg && cfg.businessName
+      ? /*#__PURE__*/React.createElement("span", {style: {color: C.accent}}, cfg.businessName.toUpperCase())
+      : /*#__PURE__*/React.createElement("span", {className: "gradient-text", style: {background: "linear-gradient(90deg,#c9a84c,#4ecdc4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"}}, "TASECA")
+  ),
+  /* Subtítulo — custom o default */
+  /*#__PURE__*/React.createElement("div", {style: {fontSize: 10, color: C.cyan, letterSpacing: 4, marginTop: 2}},
+    cfg && cfg.businessSubtitle ? cfg.businessSubtitle.toUpperCase() : "BARBER & TATTOO STUDIO"
+  )), /*#__PURE__*/React.createElement("div", {
     id: "pub-tabs-wrap"
   }, /*#__PURE__*/React.createElement("div", {
     id: "pub-tabs"
@@ -7378,7 +7379,74 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
       display: "block",
       marginBottom: 12
     }
-  }, "\u2699\uFE0F Configuraci\xF3n"), /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F Configuraci\xF3n"),
+
+  /* ── BRANDING DEL NEGOCIO ── */
+  /*#__PURE__*/React.createElement("div", {style: Object.assign({}, S.card, {border: "1.5px solid " + C.accent + "44", marginBottom: 14})},
+    /*#__PURE__*/React.createElement("b", {style: {fontSize: 13, color: C.accent, display: "block", marginBottom: 12}}, "\uD83C\uDFE2 Identidad del negocio"),
+
+    /* Logo */
+    /*#__PURE__*/React.createElement("div", {style: {display: "flex", alignItems: "center", gap: 14, marginBottom: 12}},
+      /*#__PURE__*/React.createElement("div", {style: {
+        width: 72, height: 72, borderRadius: 14,
+        background: cfg.businessLogo ? "transparent" : C.border,
+        border: "2px dashed " + C.accent + "66",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        overflow: "hidden", flexShrink: 0, cursor: "pointer"
+      }, onClick: function(){document.getElementById("bizLogoInput").click();}},
+        cfg.businessLogo
+          ? /*#__PURE__*/React.createElement("img", {src: cfg.businessLogo, style: {width: "100%", height: "100%", objectFit: "cover"}})
+          : /*#__PURE__*/React.createElement("span", {style: {fontSize: 28}}, "\uD83D\uDDBC\uFE0F")
+      ),
+      /*#__PURE__*/React.createElement("div", {style: {flex: 1}},
+        /*#__PURE__*/React.createElement("div", {style: {fontSize: 12, color: C.text, fontWeight: 700, marginBottom: 3}}, cfg.businessName || "Sin nombre"),
+        /*#__PURE__*/React.createElement("div", {style: {fontSize: 11, color: C.muted, marginBottom: 8}}, cfg.businessSubtitle || "Sin subtítulo"),
+        /*#__PURE__*/React.createElement("button", {type: "button",
+          style: Object.assign({}, S.btn("ghost"), {padding: "4px 10px", fontSize: 11}),
+          onClick: function(){document.getElementById("bizLogoInput").click();}
+        }, cfg.businessLogo ? "✏️ Cambiar logo" : "📷 Subir logo")
+      )
+    ),
+    /*#__PURE__*/React.createElement("input", {type: "file", id: "bizLogoInput", accept: "image/*", style: {display: "none"},
+      onChange: function(e){
+        if(!e.target.files[0]) return;
+        var fr = new FileReader();
+        fr.onload = function(ev){
+          var upd = Object.assign({}, cfg, {businessLogo: ev.target.result});
+          setCfg(upd);
+          DB.save("config", "cfg", upd).catch(function(err){console.error(err);});
+        };
+        fr.readAsDataURL(e.target.files[0]);
+      }
+    }),
+
+    /* Nombre */
+    /*#__PURE__*/React.createElement("div", {style: {marginBottom: 8}},
+      /*#__PURE__*/React.createElement("label", {style: S.lbl}, "Nombre del negocio"),
+      /*#__PURE__*/React.createElement("input", {style: S.inp, placeholder: "Ej: Barbería El Rey",
+        value: cfg.businessName || "",
+        onChange: function(e){setCfg(Object.assign({}, cfg, {businessName: e.target.value}));},
+        onBlur: function(e){
+          var upd = Object.assign({}, cfg, {businessName: e.target.value});
+          DB.save("config", "cfg", upd).catch(function(err){console.error(err);});
+        }
+      })
+    ),
+    /* Subtítulo */
+    /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement("label", {style: S.lbl}, "Subtítulo (ej: Barber & Tattoo Studio)"),
+      /*#__PURE__*/React.createElement("input", {style: S.inp, placeholder: "Ej: Barber & Tattoo Studio",
+        value: cfg.businessSubtitle || "",
+        onChange: function(e){setCfg(Object.assign({}, cfg, {businessSubtitle: e.target.value}));},
+        onBlur: function(e){
+          var upd = Object.assign({}, cfg, {businessSubtitle: e.target.value});
+          DB.save("config", "cfg", upd).catch(function(err){console.error(err);});
+        }
+      })
+    )
+  ),
+
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr",
