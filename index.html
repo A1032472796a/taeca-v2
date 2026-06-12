@@ -2159,6 +2159,8 @@ function Admin(p){
       {mdl&&mdl.type==="sale"&&<SaleMdl/>}
       {mdl&&mdl.type==="user"&&<UserMdl/>}
       {nslot&&<ApptMdl/>}
+      {blkMdl&&<BlockMdl/>}
+      {abonoMdl&&<AbonoMdl/>}
 
       {adet&&<div style={S.ov} onClick={function(){setAdet(null);}}>
         <div style={S.mb} onClick={function(e){e.stopPropagation();}}>
