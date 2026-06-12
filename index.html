@@ -260,7 +260,7 @@ var DB = {
       return _regenerator().w(function (_context) {
         while (1) switch (_context.n) {
           case 0:
-            no = ["config", "company", "push_subscriptions"];
+            no = ["config", "company", "push_subscriptions", "product_sales"];
             url = window.SB_URL + "/rest/v1/" + c + "?select=*" + (no.indexOf(c) < 0 ? "&order=created_at.asc" : "");
             if (SB.co(c) && window._companyId) url += "&company_id=eq." + window._companyId;
             _context.n = 1;
@@ -5053,12 +5053,10 @@ function Admin(p) {
                 items: selProds.map(function (x) {
                   return x.qty > 1 ? x.name + " x" + x.qty : x.name;
                 }),
-                itemsDetail: selProds.map(function(x){return {id:x.id,name:x.name,price:x.price,qty:x.qty};}),
                 total: total,
                 method: mt === "debe" ? "debe" : mt,
                 dueDate: mt === "debe" ? dp : null,
-                date: today(),
-                auto: false
+                date: today()
               };
               setProdSales(function (x) {
                 return x.concat([item]);
