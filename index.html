@@ -1483,7 +1483,19 @@ function Admin(p){
     var cfS=_useState(null);var clientFound=cfS[0];var setClientFound=cfS[1];
 
     var total=selProds.reduce(function(a,x){return a+x.price*x.qty;},0);
-    var filteredProds=prods.filter(function(pr){return !search||pr.name.toLowerCase().indexOf(search.toLowerCase())>=0;});
+    var filteredProds=prods.filter(function(pr){
+      if(!search)return true;
+      var q=search.toLowerCase().trim();
+      var name=pr.name.toLowerCase();
+      /* 1. Contiene el texto */
+      if(name.indexOf(q)>=0)return true;
+      /* 2. Iniciales de cada palabra (ej: "bp" encuentra "Barba y Perfilado") */
+      var initials=name.split(/\s+/).map(function(w){return w[0];}).join("");
+      if(initials.indexOf(q)>=0)return true;
+      /* 3. Cada palabra del query aparece en el nombre */
+      var words=q.split(/\s+/);
+      return words.every(function(w){return name.indexOf(w)>=0;});
+    });
 
     /* Auto-fill al ingresar teléfono */
     function handlePhone(v){
@@ -1561,25 +1573,33 @@ function Admin(p){
           <div style={{marginBottom:10}}>
             <label style={S.lbl}>Productos</label>
             <div style={{position:"relative"}}>
-              <input style={{...S.inp,paddingRight:36}} placeholder="Buscar producto..." value={search}
+              <input style={{...S.inp,paddingRight:36}} placeholder="Buscar o seleccionar producto..." value={search}
                 onChange={function(e){setSearch(e.target.value);setShowList(true);}}
                 onFocus={function(){setShowList(true);}}
-                onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();if(filteredProds.length>0)addProd(filteredProds[0]);}}}/>
-              <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:14}}>🔍</span>
+                onBlur={function(){setTimeout(function(){setShowList(false);},200);}}
+                onKeyDown={function(e){
+                  if(e.key==="Enter"){e.preventDefault();if(filteredProds.length>0)addProd(filteredProds[0]);}
+                  if(e.key==="Escape"){setShowList(false);}
+                }}/>
+              <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:14,cursor:"pointer"}}
+                onClick={function(){setShowList(function(v){return !v;});}}>
+                {showList?"▲":"▼"}
+              </span>
             </div>
-            {showList&&(search||true)&&filteredProds.length>0&&search&&(
-              <div style={{background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,marginTop:4,maxHeight:160,overflowY:"auto",zIndex:50,position:"relative"}}>
+            {showList&&(
+              <div style={{background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,marginTop:4,maxHeight:200,overflowY:"auto",zIndex:50,position:"relative",boxShadow:"0 4px 16px #000a"}}>
+                {filteredProds.length===0&&<div style={{padding:"12px",textAlign:"center",color:C.muted,fontSize:12}}>Sin productos que coincidan</div>}
                 {filteredProds.map(function(pr){
                   var inCart=selProds.some(function(x){return x.id===pr.id;});
-                  return <div key={pr.id} onClick={function(){addProd(pr);}}
-                    style={{padding:"8px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",display:"flex",justifyContent:"space-between",alignItems:"center",background:inCart?C.accent+"11":"transparent"}}>
-                    <div>
-                      <span style={{fontSize:12,fontWeight:inCart?700:400,color:inCart?C.accent:C.text}}>{pr.name}</span>
-                      <span style={{fontSize:10,color:C.muted,marginLeft:7}}>Stock: {pr.stock}</span>
+                  return <div key={pr.id} onMouseDown={function(){addProd(pr);}}
+                    style={{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",display:"flex",justifyContent:"space-between",alignItems:"center",background:inCart?C.accent+"18":"transparent"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <span style={{fontSize:13,fontWeight:inCart?700:400,color:inCart?C.accent:C.text}}>{pr.name}</span>
+                      {pr.stock!==undefined&&<span style={{fontSize:10,color:pr.stock<5?C.err:C.muted,marginLeft:8}}>Stock: {pr.stock}</span>}
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:7}}>
-                      <b style={{color:C.accent,fontSize:12}}>${pr.price}</b>
-                      {inCart&&<span style={{fontSize:10,color:C.ok}}>✓</span>}
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <b style={{color:C.accent,fontSize:13}}>${pr.price}</b>
+                      {inCart&&<span style={{color:C.ok,fontSize:12}}>✓</span>}
                     </div>
                   </div>;
                 })}
