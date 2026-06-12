@@ -2603,6 +2603,7 @@ function Public(p) {
     cfg = p.cfg,
     onBook = p.onBook,
     onAdmin = p.onAdmin,
+    onSuperAdmin = p.onSuperAdmin,
     onReg = p.onReg;
   var stampsOn = cfg && cfg.stampsOn;
   var tabs = _useState("booking");
@@ -3832,24 +3833,30 @@ function Public(p) {
       setErr("");
       setClientFound(null);
     }
-  }, "Agendar otra cita"))))), /*#__PURE__*/React.createElement("button", {
+  }, "Agendar otra cita"))))),
+  /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onAdmin,
-    onContextMenu: function(e){ e.preventDefault(); onSuperAdmin && onSuperAdmin(); },
-    title: "Staff login",
     style: {
-      position: "fixed",
-      bottom: 14,
-      right: 13,
-      background: C.card,
-      border: "1px solid " + C.border,
-      borderRadius: 20,
-      padding: "5px 11px",
-      color: C.muted,
-      fontSize: 11,
-      cursor: "pointer"
+      position: "fixed", bottom: 14, right: 13,
+      background: C.card, border: "1px solid " + C.border,
+      borderRadius: 20, padding: "5px 11px",
+      color: C.muted, fontSize: 11, cursor: "pointer"
     }
-  }, "\uD83D\uDD12 Staff"));
+  }, "\uD83D\uDD12 Staff"),
+  /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: function(){ onSuperAdmin && onSuperAdmin(); },
+    style: {
+      position: "fixed", bottom: 14, left: 13,
+      background: "transparent", border: "none",
+      borderRadius: "50%", width: 28, height: 28,
+      color: C.border, fontSize: 16, cursor: "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      opacity: 0.4
+    }
+  }, "\u2699\uFE0F")
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════
