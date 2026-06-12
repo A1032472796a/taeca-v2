@@ -5106,17 +5106,19 @@ function Admin(p) {
               _context11.n = 5;
               return DB.save("product_sales", item.id, item);
             case 5:
-              /* Descontar inventario por cada producto vendido */
-              selProds.forEach(function(sp){
-                var updated = prods.map(function(pr){
-                  if(pr.id !== sp.id) return pr;
-                  var newStock = Math.max(0, (pr.stock||0) - sp.qty);
+              /* Descontar inventario — una sola actualización de estado */
+              (function(){
+                var soldIds = {};
+                selProds.forEach(function(sp){ soldIds[sp.id] = sp.qty; });
+                var updatedProds = prods.map(function(pr){
+                  if(!soldIds[pr.id]) return pr;
+                  var newStock = Math.max(0, (pr.stock||0) - soldIds[pr.id]);
                   var updPr = Object.assign({}, pr, {stock: newStock});
-                  DB.save("products", pr.id, updPr).catch(function(e){console.error(e);});
+                  DB.save("products", pr.id, updPr).catch(function(e){console.error("Stock update error:",e);});
                   return updPr;
                 });
-                setProds(updated);
-              });
+                setProds(updatedProds);
+              })();
               _context11.n = 7;
               break;
             case 6:
