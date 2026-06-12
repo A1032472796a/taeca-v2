@@ -202,6 +202,14 @@ function toDb(c, o) {
     delete d.endTime;
     delete d.note;
   }
+  if (c === "sales") {
+    if (d.dueDate !== undefined) { d.due_date = d.dueDate; delete d.dueDate; }
+    if (d.paidDate !== undefined) { d.paid_date = d.paidDate; delete d.paidDate; }
+    /* abonos: guardar como jsonb */
+    if (d.abonos !== undefined) {
+      d.abonos = Array.isArray(d.abonos) ? d.abonos : [];
+    }
+  }
   return d;
 }
 function fromDb(c, o) {
@@ -238,6 +246,12 @@ function fromDb(c, o) {
   if (c === "appointments" && d.st_id !== undefined) {
     d.stId = d.st_id;
     delete d.st_id;
+  }
+  if (c === "sales") {
+    if (d.due_date !== undefined) { d.dueDate = d.due_date; delete d.due_date; }
+    if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
+    if (d.abonos === undefined) d.abonos = [];
+    if (d.pendiente === undefined) d.pendiente = 0;
   }
   return d;
 }
