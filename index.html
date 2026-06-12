@@ -1313,6 +1313,10 @@ function Admin(p){
   var schS=_useState(null);var schUser=schS[0];var setSchUser=schS[1];
   var adetS=_useState(null);var adet=adetS[0];var setAdet=adetS[1];
   var nslotS=_useState(null);var nslot=nslotS[0];var setNslot=nslotS[1];
+  var blkMdlS=_useState(false);var blkMdl=blkMdlS[0];var setBlkMdl=blkMdlS[1];
+  /* Caja states — deben estar aquí para respetar reglas de hooks */
+  var cajFiltS=_useState("todas");var cajFilt=cajFiltS[0];var setCajFilt=cajFiltS[1];
+  var abonoMdlS=_useState(null);var abonoMdl=abonoMdlS[0];var setAbonoMdl=abonoMdlS[1];
 
   var staffL=users.filter(function(u){return u.role==="barbero"||u.role==="tatuador";});
   var initSt=isAdmin?(staffL[0]?staffL[0].id:null):user.id;
@@ -1660,6 +1664,84 @@ function Admin(p){
     </Mdl>;
   }
 
+
+
+  /* ─── Abono Modal ─── */
+  function AbonoMdl(){
+    if(!abonoMdl)return null;
+    var s=abonoMdl;
+    var amtS=_useState("");var amt=amtS[0];var setAmt=amtS[1];
+    var noteS=_useState("");var note=noteS[0];var setNote=noteS[1];
+    var errAS=_useState("");var errA=errAS[0];var setErrA=errAS[1];
+    var abonos=s.abonos||[];
+    var totalAbonado=abonos.reduce(function(a,ab){return a+ab.monto;},0);
+    var pendiente=s.pendiente!==undefined?s.pendiente:(s.total-totalAbonado);
+
+    async function saveAbono(){
+      setErrA("");
+      var monto=Number(amt);
+      if(!monto||monto<=0){setErrA("Ingresa un monto válido");return;}
+      if(monto>pendiente){setErrA("Supera el saldo ($"+pendiente+")");return;}
+      var newAbono={id:"ab"+Date.now(),monto:monto,fecha:today(),nota:note};
+      var newAbonos=abonos.concat([newAbono]);
+      var newPend=pendiente-monto;
+      var upd=Object.assign({},s,{abonos:newAbonos,pendiente:newPend,method:newPend<=0?"efectivo":"debe",paidDate:newPend<=0?today():null});
+      setSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
+      try{await DB.save("sales",upd.id,upd);}catch(e){console.error(e);}
+      setAbonoMdl(null);
+    }
+
+    return(
+      <div style={S.ov} onClick={function(){setAbonoMdl(null);}}>
+        <div style={S.mb} onClick={function(e){e.stopPropagation();}}>
+          <div style={{...S.row,marginBottom:14}}>
+            <b style={{fontSize:15,color:C.warn}}>💵 Registrar Abono</b>
+            <button type="button" onClick={function(){setAbonoMdl(null);}} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={{background:C.warn+"11",border:"1px solid "+C.warn+"33",borderRadius:11,padding:"11px 13px",marginBottom:12}}>
+            <div style={{...S.row,marginBottom:5}}><span style={{fontSize:12,color:C.muted}}>Cliente</span><b style={{fontSize:12}}>{s.client}</b></div>
+            {s.phone&&<div style={{...S.row,marginBottom:5}}><span style={{fontSize:12,color:C.muted}}>Teléfono</span><b style={{fontSize:12}}>📞 {s.phone}</b></div>}
+            <div style={{...S.row,marginBottom:5}}><span style={{fontSize:12,color:C.muted}}>Total deuda</span><b style={{color:C.warn}}>${s.total}</b></div>
+            <div style={{...S.row,marginBottom:5}}><span style={{fontSize:12,color:C.muted}}>Ya abonado</span><b style={{color:C.ok}}>${totalAbonado}</b></div>
+            <div style={{borderTop:"1px solid "+C.warn+"33",paddingTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <b style={{fontSize:13,color:C.warn}}>Pendiente</b>
+              <b style={{fontSize:18,color:C.warn}}>${pendiente}</b>
+            </div>
+            <div style={{background:C.border,borderRadius:20,height:5,marginTop:7,overflow:"hidden"}}>
+              <div style={{width:Math.min(100,s.total>0?Math.round(totalAbonado/s.total*100):0)+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}}/>
+            </div>
+          </div>
+          {abonos.length>0&&<div style={{marginBottom:10}}>
+            <b style={{fontSize:11,color:C.muted,display:"block",marginBottom:5}}>Historial</b>
+            {abonos.map(function(ab){return <div key={ab.id} style={{display:"flex",justifyContent:"space-between",background:C.card,borderRadius:8,padding:"6px 10px",marginBottom:4}}>
+              <div><span style={{fontSize:12,color:C.ok,fontWeight:700}}>+ ${ab.monto}</span>{ab.nota&&<span style={{fontSize:10,color:C.muted,marginLeft:6}}>{ab.nota}</span>}</div>
+              <span style={{fontSize:10,color:C.muted}}>{ab.fecha}</span>
+            </div>;})}
+          </div>}
+          <label style={S.lbl}>Monto del abono</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:7}}>
+            {[Math.round(pendiente*0.25),Math.round(pendiente*0.5),Math.round(pendiente*0.75),pendiente].map(function(v){
+              return <button type="button" key={v} onClick={function(){setAmt(String(v));}}
+                style={{padding:"6px 2px",borderRadius:8,border:"1px solid "+C.warn+"44",background:Number(amt)===v?C.warn+"22":"transparent",color:Number(amt)===v?C.warn:C.muted,fontSize:10,cursor:"pointer",fontWeight:Number(amt)===v?700:400}}>
+                {v===pendiente?"Total":"$"+v}
+              </button>;
+            })}
+          </div>
+          <input style={{...S.inp,marginBottom:8}} type="number" placeholder="Monto $" value={amt}
+            onChange={function(e){setAmt(e.target.value);}}
+            onKeyDown={function(e){if(e.key==="Enter")e.preventDefault();}}/>
+          <Field label="Nota (opcional)" val={note} set={setNote} ph="Efectivo, transferencia..."/>
+          {errA&&<div style={{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}}>⚠️ {errA}</div>}
+          <div style={{display:"flex",gap:10,marginTop:4}}>
+            <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={function(){setAbonoMdl(null);}}>Cancelar</button>
+            <button type="button" style={{...S.btn("gold"),flex:2,color:"#000"}} onClick={saveAbono}>Registrar abono</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   /* ─── Photo Btn ─── */
   function PhotoBtn(pp){
     var u=pp.u,ref=_useRef();
@@ -1928,215 +2010,78 @@ function Admin(p){
                 </div>;})}
               </div>
 
-              {/* FILTRO */}
-              {(function(){
-                var cajFiltS=_useState("todas");var cajFilt=cajFiltS[0];var setCajFilt=cajFiltS[1];
-                var filtSales=cajFilt==="debe"?visSales.filter(function(s){return s.method==="debe";}):cajFilt==="pagadas"?visSales.filter(function(s){return s.method!=="debe";}):visSales;
-                var abonoMdlS=_useState(null);var abonoMdl=abonoMdlS[0];var setAbonoMdl=abonoMdlS[1];
+              {/* Alerta vencidas */}
+              {visSales.filter(function(s){return s.method==="debe"&&s.dueDate&&s.dueDate<today();}).length>0&&(
+                <div style={{background:C.err+"18",border:"1px solid "+C.err+"44",borderRadius:11,padding:"9px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:9}}>
+                  <span style={{fontSize:20}}>🚨</span>
+                  <div>
+                    <b style={{color:C.err,fontSize:12}}>{visSales.filter(function(s){return s.method==="debe"&&s.dueDate&&s.dueDate<today();}).length} deuda(s) vencida(s)</b>
+                    <div style={{fontSize:10,color:C.muted}}>Total: <b style={{color:C.err}}>${visSales.filter(function(s){return s.method==="debe"&&s.dueDate&&s.dueDate<today();}).reduce(function(a,s){return a+s.total;},0)}</b></div>
+                  </div>
+                </div>
+              )}
 
-                async function markPaid(s){
-                  var upd=Object.assign({},s,{method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0});
-                  setSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
-                  try{await DB.save("sales",upd.id,upd);}catch(e){console.error(e);}
-                }
+              {/* Filtros */}
+              <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto"}}>
+                {[["todas","Todas"],["debe","⏳ Deudas"],["pagadas","✅ Pagadas"]].map(function(x){
+                  var active=cajFilt===x[0];
+                  var cnt=x[0]==="todas"?visSales.length:x[0]==="debe"?visSales.filter(function(s){return s.method==="debe";}).length:visSales.filter(function(s){return s.method!=="debe";}).length;
+                  return <button type="button" key={x[0]} onClick={function(){setCajFilt(x[0]);}}
+                    style={{...S.btn(active?"gold":"ghost"),padding:"5px 11px",fontSize:11,color:active?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0}}>
+                    {x[1]}<span style={{background:active?C.accent+"44":C.border,color:active?"#000":C.muted,borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:3}}>{cnt}</span>
+                  </button>;
+                })}
+              </div>
 
-                function AbonoMdl(){
-                  var s=abonoMdl;
-                  var amtS=_useState("");var amt=amtS[0];var setAmt=amtS[1];
-                  var noteS=_useState("");var note=noteS[0];var setNote=noteS[1];
-                  var errAS=_useState("");var errA=errAS[0];var setErrA=errAS[1];
-                  var abonos=s.abonos||[];
-                  var totalAbonado=abonos.reduce(function(a,ab){return a+ab.monto;},0);
-                  var pendiente=s.pendiente!==undefined?s.pendiente:s.total-totalAbonado;
-
-                  async function saveAbono(){
-                    setErrA("");
-                    var monto=Number(amt);
-                    if(!monto||monto<=0){setErrA("Ingresa un monto válido");return;}
-                    if(monto>pendiente){setErrA("El abono supera el saldo pendiente ($"+pendiente+")");return;}
-                    var newAbono={id:"ab"+Date.now(),monto:monto,fecha:today(),nota:note};
-                    var newAbonos=abonos.concat([newAbono]);
-                    var newPendiente=pendiente-monto;
-                    var upd=Object.assign({},s,{
-                      abonos:newAbonos,
-                      pendiente:newPendiente,
-                      method:newPendiente<=0?"efectivo":"debe",
-                      paidDate:newPendiente<=0?today():null
-                    });
-                    setSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
-                    try{await DB.save("sales",upd.id,upd);}catch(e){console.error(e);}
-                    setAbonoMdl(null);
-                  }
-
-                  return <div style={S.ov} onClick={function(){setAbonoMdl(null);}}>
-                    <div style={S.mb} onClick={function(e){e.stopPropagation();}}>
-                      <div style={{...S.row,marginBottom:14}}>
-                        <b style={{fontSize:15,color:C.warn}}>💵 Registrar Abono</b>
-                        <button type="button" onClick={function(){setAbonoMdl(null);}} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
-                      </div>
-                      {/* Resumen */}
-                      <div style={{background:C.warn+"11",border:"1px solid "+C.warn+"33",borderRadius:11,padding:"11px 13px",marginBottom:12}}>
-                        {[["Cliente",s.client],s.phone?["Teléfono","📞 "+s.phone]:null,["Total deuda","$"+s.total],["Ya abonado","$"+totalAbonado]].filter(Boolean).map(function(x){
-                          return <div key={x[0]} style={{...S.row,marginBottom:5}}>
-                            <span style={{fontSize:12,color:C.muted}}>{x[0]}</span>
-                            <b style={{fontSize:12}}>{x[1]}</b>
-                          </div>;
-                        })}
-                        <div style={{borderTop:"1px solid "+C.warn+"33",paddingTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <b style={{fontSize:13,color:C.warn}}>Saldo pendiente</b>
-                          <b style={{fontSize:18,color:C.warn}}>${pendiente}</b>
-                        </div>
-                        <div style={{background:C.border,borderRadius:20,height:5,marginTop:8,overflow:"hidden"}}>
-                          <div style={{width:Math.min(100,Math.round(totalAbonado/s.total*100))+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}}/>
-                        </div>
-                        <div style={{fontSize:9,color:C.muted,marginTop:2,textAlign:"right"}}>{Math.round(totalAbonado/s.total*100)}% pagado</div>
-                      </div>
-                      {/* Historial */}
-                      {abonos.length>0&&<div style={{marginBottom:11}}>
-                        <b style={{fontSize:11,color:C.muted,display:"block",marginBottom:5}}>Historial de abonos</b>
-                        {abonos.map(function(ab){return <div key={ab.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.card,borderRadius:8,padding:"6px 10px",marginBottom:4}}>
-                          <div><span style={{fontSize:12,color:C.ok,fontWeight:700}}>+ ${ab.monto}</span>{ab.nota&&<span style={{fontSize:10,color:C.muted,marginLeft:7}}>{ab.nota}</span>}</div>
-                          <span style={{fontSize:10,color:C.muted}}>📆 {ab.fecha}</span>
-                        </div>;})}
-                      </div>}
-                      {/* Monto rápido */}
-                      <label style={S.lbl}>Monto del abono</label>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:7}}>
-                        {[Math.round(pendiente*0.25),Math.round(pendiente*0.5),Math.round(pendiente*0.75),pendiente].map(function(v){
-                          return <button type="button" key={v} onClick={function(){setAmt(String(v));}}
-                            style={{padding:"6px 2px",borderRadius:8,border:"1px solid "+C.warn+"44",background:Number(amt)===v?C.warn+"22":"transparent",color:Number(amt)===v?C.warn:C.muted,fontSize:10,cursor:"pointer",fontWeight:Number(amt)===v?700:400}}>
-                            {v===pendiente?"Total":"$"+v}
-                          </button>;
-                        })}
-                      </div>
-                      <input style={{...S.inp,marginBottom:8}} type="number" placeholder="Monto $" value={amt}
-                        onChange={function(e){setAmt(e.target.value);}}
-                        onKeyDown={function(e){if(e.key==="Enter")e.preventDefault();}}/>
-                      <Field label="Nota (opcional)" val={note} set={setNote} ph="Efectivo, transferencia..."/>
-                      {errA&&<div style={{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}}>⚠️ {errA}</div>}
-                      <div style={{display:"flex",gap:10,marginTop:4}}>
-                        <button type="button" style={{...S.btn("ghost"),flex:1}} onClick={function(){setAbonoMdl(null);}}>Cancelar</button>
-                        <button type="button" style={{...S.btn("gold"),flex:2,color:"#000"}} onClick={saveAbono}>Registrar abono</button>
-                      </div>
+              {/* Lista ventas */}
+              <div className="desktop-2col">
+              {(cajFilt==="debe"?visSales.filter(function(s){return s.method==="debe";}):cajFilt==="pagadas"?visSales.filter(function(s){return s.method!=="debe";}):visSales).map(function(s){
+                var isDebt=s.method==="debe";
+                var isVencida=isDebt&&s.dueDate&&s.dueDate<today();
+                var abonos=s.abonos||[];
+                var totalAbonado=abonos.reduce(function(a,ab){return a+ab.monto;},0);
+                var pendiente=isDebt?(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado):0;
+                return <div key={s.id} style={{...S.card,border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)}}>
+                  <div style={S.row}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <b style={{fontSize:12}}>{s.client}</b>
+                      {s.phone&&<div style={{color:C.muted,fontSize:10}}>📞 {s.phone}</div>}
+                      <div style={{color:C.muted,fontSize:10,marginTop:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{(s.items||[]).join(", ")}</div>
                     </div>
-                  </div>;
-                }
-
-                return <div>
-                  {/* Alerta vencidas */}
-                  {(function(){
-                    var vencidas=visSales.filter(function(s){return s.method==="debe"&&s.dueDate&&s.dueDate<today();});
-                    if(!vencidas.length)return null;
-                    return <div style={{background:C.err+"18",border:"1px solid "+C.err+"44",borderRadius:11,padding:"9px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:9}}>
-                      <span style={{fontSize:20}}>🚨</span>
-                      <div><b style={{color:C.err,fontSize:12}}>{vencidas.length} deuda{vencidas.length>1?"s":""} vencida{vencidas.length>1?"s":""}</b>
-                      <div style={{fontSize:10,color:C.muted}}>Total: <b style={{color:C.err}}>${vencidas.reduce(function(a,s){return a+s.total;},0)}</b></div></div>
-                    </div>;
-                  })()}
-                  {/* Filtros */}
-                  <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto"}}>
-                    {[["todas","Todas"],["debe","⏳ Deudas"],["pagadas","✅ Pagadas"]].map(function(x){
-                      var active=cajFilt===x[0];
-                      var cnt=x[0]==="todas"?visSales.length:x[0]==="debe"?visSales.filter(function(s){return s.method==="debe";}).length:visSales.filter(function(s){return s.method!=="debe";}).length;
-                      return <button type="button" key={x[0]} onClick={function(){setCajFilt(x[0]);}}
-                        style={{...S.btn(active?"gold":"ghost"),padding:"5px 11px",fontSize:11,color:active?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0}}>
-                        {x[1]}<span style={{background:active?C.accent+"44":C.border,color:active?"#000":C.muted,borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:3}}>{cnt}</span>
-                      </button>;
-                    })}
+                    <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
+                      {isDebt&&totalAbonado>0
+                        ?<div><b style={{color:C.warn,fontSize:13}}>${pendiente}<span style={{fontSize:9,color:C.muted}}> pend.</span></b><div style={{fontSize:9,color:C.ok}}>Abonado: ${totalAbonado}</div></div>
+                        :<b style={{color:isDebt?C.warn:C.accent,fontSize:13}}>${s.total}</b>}
+                      <div><span style={S.badge(isDebt?C.warn:C.ok)}>{s.auto?"Auto":""} {isDebt?"⏳ Debe":s.method}</span></div>
+                    </div>
                   </div>
-                  <div className="desktop-2col">
-                  {filtSales.map(function(s){
-                    var isDebt=s.method==="debe";
-                    var isVencida=isDebt&&s.dueDate&&s.dueDate<today();
-                    var abonos=s.abonos||[];
-                    var totalAbonado=abonos.reduce(function(a,ab){return a+ab.monto;},0);
-                    var pendiente=isDebt?(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado):0;
-                    return <div key={s.id} style={{...S.card,border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)}}>
-                      <div style={S.row}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <b style={{fontSize:12}}>{s.client}</b>
-                          {s.phone&&<div style={{color:C.muted,fontSize:10}}>📞 {s.phone}</div>}
-                          <div style={{color:C.muted,fontSize:10,marginTop:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{(s.items||[]).join(", ")}</div>
-                        </div>
-                        <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
-                          {isDebt&&totalAbonado>0
-                            ?<div><b style={{color:C.warn,fontSize:14}}>${pendiente}<span style={{fontSize:9,color:C.muted,fontWeight:400}}> pend.</span></b><div style={{fontSize:9,color:C.ok}}>Abonado: ${totalAbonado}</div></div>
-                            :<b style={{color:isDebt?C.warn:C.accent,fontSize:14}}>${s.total}</b>}
-                          <div><span style={S.badge(isDebt?C.warn:C.ok)}>{s.auto?"Auto":""} {isDebt?"⏳ Debe":s.method}</span></div>
-                        </div>
-                      </div>
-                      {isDebt&&totalAbonado>0&&<div style={{marginTop:6}}>
-                        <div style={{background:C.border,borderRadius:20,height:4,overflow:"hidden"}}>
-                          <div style={{width:Math.min(100,Math.round(totalAbonado/s.total*100))+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}}/>
-                        </div>
-                        <div style={{fontSize:9,color:C.muted,marginTop:2}}>{Math.round(totalAbonado/s.total*100)}% · {abonos.length} abono{abonos.length>1?"s":""}</div>
-                      </div>}
-                      <div style={{marginTop:5,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
-                        <span style={{color:C.muted,fontSize:10}}>📆 {s.date}</span>
-                        {isDebt&&s.dueDate&&<span style={{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}}>{isVencida?"🚨 Vencido:":"Límite:"} {s.dueDate}</span>}
-                        {s.paidDate&&<span style={{color:C.ok,fontSize:10}}>✅ Pagado: {s.paidDate}</span>}
-                      </div>
-                      {isDebt&&isAdmin&&<div style={{display:"flex",gap:6,marginTop:7}}>
-                        <button type="button" style={{...S.btn("ghost"),flex:1,padding:"6px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn}} onClick={function(){setAbonoMdl(s);}}>💵 Abonar</button>
-                        <button type="button" style={{...S.btn("cyan"),flex:1,padding:"6px",fontSize:11,color:"#000"}} onClick={function(){markPaid(s);}}>✅ Pago total</button>
-                      </div>}
-                    </div>;
-                  })}
+                  {isDebt&&totalAbonado>0&&<div style={{marginTop:6}}>
+                    <div style={{background:C.border,borderRadius:20,height:4,overflow:"hidden"}}>
+                      <div style={{width:Math.min(100,s.total>0?Math.round(totalAbonado/s.total*100):0)+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}}/>
+                    </div>
+                    <div style={{fontSize:9,color:C.muted,marginTop:2}}>{Math.round(totalAbonado/s.total*100)}% · {abonos.length} abono{abonos.length>1?"s":""}</div>
+                  </div>}
+                  <div style={{marginTop:5,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
+                    <span style={{color:C.muted,fontSize:10}}>📆 {s.date}</span>
+                    {isDebt&&s.dueDate&&<span style={{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}}>{isVencida?"🚨 Vencido:":"Límite:"} {s.dueDate}</span>}
+                    {s.paidDate&&<span style={{color:C.ok,fontSize:10}}>✅ Pagado: {s.paidDate}</span>}
                   </div>
-                  {filtSales.length===0&&<div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:12,background:C.card,borderRadius:12}}>Sin ventas con este filtro</div>}
-                  {abonoMdl&&<AbonoMdl/>}
+                  {isDebt&&isAdmin&&<div style={{display:"flex",gap:6,marginTop:7}}>
+                    <button type="button" style={{...S.btn("ghost"),flex:1,padding:"6px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn}} onClick={function(){setAbonoMdl(s);}}>💵 Abonar</button>
+                    <button type="button" style={{...S.btn("cyan"),flex:1,padding:"6px",fontSize:11,color:"#000"}} onClick={async function(){
+                      var upd=Object.assign({},s,{method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0});
+                      setSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
+                      try{await DB.save("sales",upd.id,upd);}catch(e){console.error(e);}
+                    }}>✅ Pago total</button>
+                  </div>}
                 </div>;
-              })()}
-
-                  {/* Botones filtro */}
-                  <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto"}}>
-                    {[["todas","Todas",C.accent],[""+(visSales.length),""],["debe","⏳ Deudas",C.warn],[""+(visSales.filter(function(s){return s.method==="debe";}).length),""],["pagadas","✅ Pagadas",C.ok],[""+(visSales.filter(function(s){return s.method!=="debe";}).length),""]].filter(function(x){return x[1];}).map(function(x,i){
-                      var key=x[0];var label=x[1];var col=x[2]||C.accent;
-                      var active=cajFilt===key;
-                      return <button type="button" key={key} onClick={function(){setCajFilt(key);}}
-                        style={{...S.btn(active?"gold":"ghost"),padding:"5px 11px",fontSize:11,color:active?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0,border:"1px solid "+(active?C.accent:C.border)}}>
-                        {label}
-                      </button>;
-                    })}
-                  </div>
-
-                  <div className="desktop-2col">
-                  {filtSales.map(function(s){
-                    var isDebt=s.method==="debe";
-                    var isVencida=isDebt&&s.dueDate&&s.dueDate<today();
-                    return <div key={s.id} style={{...S.card,border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)}}>
-                      <div style={S.row}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <b style={{fontSize:12}}>{s.client}</b>
-                          {s.phone&&<div style={{color:C.muted,fontSize:10}}>📞 {s.phone}</div>}
-                          <div style={{color:C.muted,fontSize:10,marginTop:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{(s.items||[]).join(", ")}</div>
-                        </div>
-                        <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
-                          <b style={{color:isDebt?C.warn:C.accent,fontSize:14}}>${s.total}</b>
-                          <div><span style={S.badge(isDebt?C.warn:C.ok)}>{s.auto?"Auto":""} {isDebt?"⏳ Debe":s.method}</span></div>
-                        </div>
-                      </div>
-                      <div style={{marginTop:5,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:5}}>
-                        <span style={{color:C.muted,fontSize:10}}>📆 {s.date}</span>
-                        {isDebt&&s.dueDate&&<span style={{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}}>{isVencida?"🚨 Vencido:":"Pagar antes:"} {s.dueDate}</span>}
-                        {s.paidDate&&<span style={{color:C.ok,fontSize:10}}>✅ Pagado: {s.paidDate}</span>}
-                      </div>
-                      {isDebt&&isAdmin&&<button type="button"
-                        style={{...S.btn("cyan"),width:"100%",padding:"6px",fontSize:11,color:"#000",marginTop:7}}
-                        onClick={function(){markPaid(s);}}>
-                        ✅ Marcar como pagado
-                      </button>}
-                    </div>;
-                  })}
-                  </div>
-                  {filtSales.length===0&&<div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:12,background:C.card,borderRadius:12}}>Sin ventas con este filtro</div>}
-                </div>;
-              })()}
+              })}
+              </div>
 
               <button type="button" style={{position:"fixed",bottom:80,right:18,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:48,height:48,fontSize:22,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 14px #c9a84c55",zIndex:99}} onClick={function(){setMdl({type:"sale",d:{}});}}>+</button>
             </div>}
 
-            {tab==="reportes"&&<Reportes appts={visAppts} sales={visSales} clients={visClients} users={users} isAdmin={isAdmin}/>}
+                        {tab==="reportes"&&<Reportes appts={visAppts} sales={visSales} clients={visClients} users={users} isAdmin={isAdmin}/>}
 
             {tab==="config"&&isAdmin&&<div>
               <b style={{fontSize:15,color:C.accent,display:"block",marginBottom:12}}>⚙️ Configuración</b>
