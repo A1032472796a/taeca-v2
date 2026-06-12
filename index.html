@@ -3851,18 +3851,25 @@ function Public(p) {
       color: C.muted, fontSize: 11, cursor: "pointer"
     }
   }, "\uD83D\uDD12 Staff"),
-  /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: function(){ onSuperAdmin && onSuperAdmin(); },
-    style: {
-      position: "fixed", bottom: 14, left: 13,
-      background: "transparent", border: "none",
-      borderRadius: "50%", width: 28, height: 28,
-      color: C.border, fontSize: 16, cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      opacity: 0.4
-    }
-  }, "\u2699\uFE0F")
+  /* ⚙️ Solo visible en app.taseca.tech sin empresa */
+  (function(){
+    var host=window.location.hostname;
+    var hasE=new URLSearchParams(window.location.search).get("e");
+    var isRoot=host==="app.taseca.tech"&&!hasE;
+    if(!isRoot)return null;
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: function(){ onSuperAdmin && onSuperAdmin(); },
+      style: {
+        position: "fixed", bottom: 14, left: 13,
+        background: "transparent", border: "none",
+        borderRadius: "50%", width: 28, height: 28,
+        color: C.border, fontSize: 16, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        opacity: 0.4
+      }
+    }, "\u2699\uFE0F");
+  })()
   );
 }
 
@@ -8325,18 +8332,17 @@ function SuperAdmin(p) {
           var enc=new TextEncoder();
           var buf=yield crypto.subtle.digest("SHA-256",enc.encode(pin));
           var hashedPin=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
-          var compId=Math.floor(Math.random()*2000000000);
           var coRes=yield fetch(window.SB_URL+"/rest/v1/company",{method:"POST",
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
-            body:JSON.stringify({id:compId,company_name:name.trim(),company_id:slug,active:true,plan:type})});
+            body:JSON.stringify({company_name:name.trim(),company_id:slug,active:true,plan:type})});
           if(!coRes.ok){var t=yield coRes.text();throw new Error(t);}
           var newCo=(yield coRes.json())[0];
           yield fetch(window.SB_URL+"/rest/v1/users",{method:"POST",
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
-            body:JSON.stringify({id:"u_"+compId+"_admin",name:"Admin",role:"admin",pin:hashedPin,photo:null,work_days:[1,2,3,4,5,6],w_start:"08:00",w_end:"21:00",blocks:{},company_id:newCo.id})});
+            body:JSON.stringify({id:"u_"+newCo.id+"_admin",name:"Admin",role:"admin",pin:hashedPin,photo:null,work_days:[1,2,3,4,5,6],w_start:"08:00",w_end:"21:00",blocks:{},company_id:newCo.id})});
           yield fetch(window.SB_URL+"/rest/v1/config",{method:"POST",
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
-            body:JSON.stringify({id:"cfg_"+compId,stamps_on:true,company_id:newCo.id})});
+            body:JSON.stringify({id:"cfg_"+newCo.id,stamps_on:true,company_id:newCo.id})});
           setCompanies(function(x){return x.concat([newCo]);});
           /* Mostrar resumen */
           alert("✅ Empresa creada!\n\n🏢 "+name.trim()+"\n🔗 app.taseca.tech?e="+slug+"\n🔑 PIN Admin: "+pin+"\n\nCompartir esta URL con el cliente.");
