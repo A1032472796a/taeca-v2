@@ -498,7 +498,7 @@ function WeekCal(p){
                 if(!su)return null;
                 var sc=STAFF_COLORS[si%STAFF_COLORS.length];
                 var cnt=wa.filter(function(a){return(a.stId||a.st_id)===su.id;}).length;
-                return <div key={su.id} style={{flex:1,minWidth:120,borderLeft:"1px solid "+C.border+"44",padding:"7px 8px",background:sc+"0d"}}>
+                return <div key={su.id} style={{flex:1,minWidth:120,borderLeft:"2px solid "+C.border+"88",padding:"7px 8px",background:sc+"0d"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:sc,flexShrink:0}}/>
                     <div style={{fontSize:11,fontWeight:700,color:sc,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{su.name.split(" ")[0]}</div>
@@ -529,15 +529,17 @@ function WeekCal(p){
           {/* ── FILAS DE TIEMPO ── */}
           {hrs.map(function(hr){return [0,30].map(function(mn){
             var slotKey=hr+"-"+mn;
+            var isHour=mn===0;
 
             if(view==="day"){
               /* Vista día: una columna por barbero */
-              return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid "+C.border+"18",minHeight:52}}>
-                <div style={{width:36,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:2}}>
-                  {mn===0&&<span style={{fontSize:8,color:C.muted}}>{hr}:00</span>}
+              return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),minHeight:52,background:isHour?"transparent":"#ffffff04"}}>
+                <div style={{width:36,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:2,borderRight:"2px solid "+C.border+"66"}}>
+                  {isHour&&<span style={{fontSize:8,color:C.muted,fontWeight:700}}>{hr}:00</span>}
+                  {!isHour&&<span style={{fontSize:7,color:C.border+"88"}}>:30</span>}
                 </div>
                 {cols.map(function(su,si){
-                  if(!su)return <div key={si} style={{flex:1,minWidth:120,borderLeft:"1px solid "+C.border+"44"}}/>;
+                  if(!su)return <div key={si} style={{flex:1,minWidth:120,borderLeft:"2px solid "+C.border+"88"}}/>;
                   var sc=STAFF_COLORS[si%STAFF_COLORS.length];
                   var iw=isWork(su,cur,hr,mn);
                   var bl=su.blocks&&su.blocks[ts(cur)];
@@ -546,7 +548,7 @@ function WeekCal(p){
                   var slotAppts=getStaffAppts(su.id,ts(cur),hr,mn);
                   return <div key={su.id}
                     onClick={function(){if(slotAppts.length>0)onAppt(slotAppts[0]);else if(iw&&!ib)onSlot(cur,hr,mn,su.id);}}
-                    style={{flex:1,minWidth:120,borderLeft:"1px solid "+sc+"22",position:"relative",background:!iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",cursor:iw&&!ib?"pointer":"default"}}>
+                    style={{flex:1,minWidth:120,borderLeft:"2px solid "+sc+"66",position:"relative",background:!iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",cursor:iw&&!ib?"pointer":"default"}}>
                     {/* Color stripe per barbero */}
                     <div style={{position:"absolute",left:0,top:0,bottom:0,width:2,background:sc+"44"}}/>
                     {slotAppts.map(function(a,ai){
@@ -570,16 +572,16 @@ function WeekCal(p){
             }
 
             /* Vista semana: una columna por día, citas de todos */
-            return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid "+C.border+"18",minHeight:28}}>
-              <div style={{width:36,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:2}}>
-                {mn===0&&<span style={{fontSize:8,color:C.muted}}>{hr}:00</span>}
+            return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),minHeight:28,background:isHour?"transparent":"#ffffff04"}}>
+              <div style={{width:36,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:2,borderRight:"2px solid "+C.border+"66"}}>
+                {isHour&&<span style={{fontSize:8,color:C.muted,fontWeight:700}}>{hr}:00</span>}
               </div>
               {wk.map(function(d,di){
                 var ds=ts(d);
                 var slot=(hr<10?"0":"")+hr+":"+(mn===0?"00":"30");
                 var daySlotAppts=wa.filter(function(a){return a.date===ds&&a.time===slot;});
                 var isToday2=ds===today();
-                return <div key={di} style={{flex:1,borderLeft:"1px solid "+C.border+"18",position:"relative",background:isToday2?"#0e1520":"transparent",minWidth:44,cursor:"pointer"}}
+                return <div key={di} style={{flex:1,borderLeft:"1px solid "+C.border+"55",position:"relative",background:isToday2?"#0e1520":"transparent",minWidth:44,cursor:"pointer"}}
                   onClick={function(){setCur(d);setView("day");}}>
                   {daySlotAppts.length>0&&(
                     <div style={{position:"absolute",inset:"1px",display:"flex",gap:1}}>
