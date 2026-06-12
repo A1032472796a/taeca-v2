@@ -8318,7 +8318,7 @@ function SuperAdmin(p) {
           var enc=new TextEncoder();
           var buf=yield crypto.subtle.digest("SHA-256",enc.encode(pin));
           var hashedPin=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
-          var compId=Date.now();
+          var compId=Math.floor(Math.random()*2000000000);
           var coRes=yield fetch(window.SB_URL+"/rest/v1/company",{method:"POST",
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
             body:JSON.stringify({id:compId,company_name:name.trim(),company_id:slug,active:true,plan:type})});
