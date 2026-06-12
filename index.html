@@ -7292,7 +7292,11 @@ function Admin(p) {
 cajSub==="servicios" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+visSales.reduce(function(a,s){return a+s.total;},0),"Total servicios",C.accent],
-     ["$"+visSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){return a+s.total;},0),"Por cobrar",C.warn],
+     ["$"+visSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
+       var abonos=s.abonos||[];
+       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
+       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
+     },0),"Por cobrar",C.warn],
      [visSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
       /*#__PURE__*/React.createElement("div",{style:{fontSize:16,fontWeight:900,color:x[2]}},x[0]),
@@ -7321,7 +7325,11 @@ cajSub==="servicios" && /*#__PURE__*/React.createElement("div", null,
 cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+prodSales.reduce(function(a,s){return a+s.total;},0),"Total productos",C.accent],
-     ["$"+prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){return a+s.total;},0),"Por cobrar",C.warn],
+     ["$"+prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
+       var abonos=s.abonos||[];
+       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
+       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
+     },0),"Por cobrar",C.warn],
      [prodSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
       /*#__PURE__*/React.createElement("div",{style:{fontSize:16,fontWeight:900,color:x[2]}},x[0]),
