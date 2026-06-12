@@ -4211,10 +4211,11 @@ function Admin(p) {
             upd = Object.assign({}, cfg, {
               stampsOn: !stampsOn
             });
-            _context27.n = 1;
-            return DB.save("config", upd.id||"cfg", upd);
-          case 1:
+            /* UI primero */
             setCfg(upd);
+            _context27.n = 1;
+            return DB.save("config", upd.id||("cfg_"+(window._companyId||"")), upd);
+          case 1:
           case 2:
             return _context27.a(2);
         }
@@ -7524,7 +7525,7 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
       color: C.ok,
       fontSize: 12
     }
-  }, "\uD83D\uDD25 Firebase conectado"))), /*#__PURE__*/React.createElement("div", {
+  }, "⚡ Supabase conectado"))), /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, S.card), {}, {
       border: "1.5px solid " + (stampsOn ? C.ok : C.border)
     })
@@ -8111,7 +8112,10 @@ function App() {
             _context30.n = 16;
             break;
           }
-          setCfg(cfArr[0]);
+          var loadedCfg = cfArr[0];
+          /* Asegurar que siempre tenga id */
+          if(!loadedCfg.id) loadedCfg.id = "cfg_"+(window._companyId||"default");
+          setCfg(loadedCfg);
           _context30.n = 17;
           break;
         case 16:
