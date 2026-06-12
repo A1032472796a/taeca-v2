@@ -126,6 +126,7 @@ window.SB_KEY = "sb_publishable_IY28r6SMHCOavF4a8XHJQQ_uTFMZseW";
   var host=window.location.hostname,parts=host.split(".");
   window._companySlug=(parts.length>=3&&parts[0]!=="www")?parts[0]:null;
   window._companyId=null;
+  /* También guardar el host completo para matching por URL */
   console.log("[Taseca] slug:",window._companySlug||"(sin empresa)");
 })();
 </script>
@@ -8123,7 +8124,9 @@ function App() {
               if (co) {
                 window._companyId = co.id;
                 console.log("[Taseca] empresa:", co.company_id, "id:", co.id);
-              } else console.warn("[Taseca] empresa no encontrada:", window._companySlug);
+              } else {
+                console.warn("[Taseca] empresa no encontrada:", window._companySlug);
+              }
             case 2:
               _context31.n = 4;
               break;
@@ -8359,6 +8362,7 @@ function SuperAdmin(p) {
           ce("select",{style:S.inp,value:type,onChange:function(e){setType(e.target.value);}},
             TYPES.map(function(t){return ce("option",{key:t.v,value:t.v},t.l);}))
         ),
+
         ce("div",{style:{marginBottom:10}},
           ce("label",{style:S.lbl},"PIN Admin (4 dígitos)"),
           ce("input",{style:S.inp,placeholder:"0000",value:pin,onChange:function(e){setPin(e.target.value);}})
