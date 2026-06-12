@@ -8337,6 +8337,8 @@ function SuperAdmin(p) {
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
             body:JSON.stringify({id:"cfg_"+compId,stamps_on:true,company_id:newCo.id})});
           setCompanies(function(x){return x.concat([newCo]);});
+          /* Mostrar resumen */
+          alert("✅ Empresa creada!\n\n🏢 "+name.trim()+"\n🔗 app.taseca.tech?e="+slug+"\n🔑 PIN Admin: "+pin+"\n\nCompartir esta URL con el cliente.");
           setMdl(false);
         } catch(e){setErr("Error: "+e.message);}
         setLoad(false);
@@ -8356,12 +8358,12 @@ function SuperAdmin(p) {
           ce("input",{style:S.inp,placeholder:"Barbería El Rey",value:name,onChange:function(e){setName(e.target.value);}})
         ),
         ce("div",{style:{marginBottom:10}},
-          ce("label",{style:S.lbl},"Subdominio *"),
+          ce("label",{style:S.lbl},"Identificador único (slug) *"),
           ce("div",{style:{display:"flex",alignItems:"center",gap:6}},
-            ce("input",{style:S.inp,placeholder:"elrey",value:slug,onChange:function(e){setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,""));}}),
+            ce("input",{style:S.inp,placeholder:"elrey (sin espacios ni caracteres especiales)",value:slug,onChange:function(e){setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,""));}}),
             ce("span",{style:{fontSize:11,color:C.muted,whiteSpace:"nowrap"}},".taseca.tech")
           ),
-          slug&&ce("div",{style:{fontSize:10,color:C.cyan,marginTop:4}},"→ ",slug,".taseca.tech")
+          slug&&ce("div",{style:{fontSize:10,color:C.cyan,marginTop:4}},"→ app.taseca.tech?e=",slug)
         ),
         ce("div",{style:{marginBottom:10}},
           ce("label",{style:S.lbl},"Tipo"),
