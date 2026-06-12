@@ -123,11 +123,17 @@ b,strong{color:inherit;-webkit-text-fill-color:inherit}
 window.SB_URL = "https://xqezegrphnwfxyuxadzd.supabase.co";
 window.SB_KEY = "sb_publishable_IY28r6SMHCOavF4a8XHJQQ_uTFMZseW";
 (function(){
+  /* 1. Parámetro ?e=slug — ej: app.taseca.tech?e=holi */
+  var params=new URLSearchParams(window.location.search);
+  var paramSlug=params.get("e")||null;
+  /* 2. Subdominio — ej: holi.taseca.tech */
   var host=window.location.hostname,parts=host.split(".");
-  window._companySlug=(parts.length>=3&&parts[0]!=="www")?parts[0]:null;
+  var skipSubs=["app","www","localhost","127"];
+  var subSlug=(parts.length>=3&&skipSubs.indexOf(parts[0])<0)?parts[0]:null;
+  /* Prioridad: parámetro > subdominio */
+  window._companySlug=paramSlug||subSlug||null;
   window._companyId=null;
-  /* También guardar el host completo para matching por URL */
-  console.log("[Taseca] slug:",window._companySlug||"(sin empresa)");
+  console.log("[Taseca] slug:",window._companySlug||"(sin empresa)","via:",paramSlug?"?e=param":subSlug?"subdominio":"ninguno");
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -8430,7 +8436,7 @@ function SuperAdmin(p) {
                 ICONS[co.plan]||"🏢"),
               ce("div",null,
                 ce("b",{style:{fontSize:14}},co.company_name),
-                ce("div",{style:{fontSize:11,color:C.cyan,marginTop:1}},co.company_id,".taseca.tech"),
+                ce("div",{style:{fontSize:11,color:C.cyan,marginTop:1}},"app.taseca.tech?e=",co.company_id),
                 ce("div",{style:{fontSize:10,color:C.muted}},LABELS[co.plan]||co.plan)
               )
             ),
@@ -8438,7 +8444,7 @@ function SuperAdmin(p) {
           ),
           ce("div",{style:{display:"flex",gap:6,marginTop:10}},
             ce("button",{type:"button",style:{flex:1,background:C.cyan,border:"none",borderRadius:10,padding:"6px",fontSize:11,color:"#000",fontWeight:700,cursor:"pointer"},
-              onClick:function(){window.open("https://"+co.company_id+".taseca.tech","_blank");}
+              onClick:function(){window.open("https://app.taseca.tech?e="+co.company_id,"_blank");}
             },"🚀 Abrir"),
             ce("button",{type:"button",style:{flex:1,background:"transparent",border:"1px solid "+C.border,borderRadius:10,padding:"6px",fontSize:11,color:C.muted,cursor:"pointer"},
               onClick:function(){
