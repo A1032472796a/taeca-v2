@@ -165,7 +165,7 @@ var SB = {
     };
   },
   co: function co(c) {
-    return ["users", "services", "products", "clients", "appointments", "sales", "config"].indexOf(c) >= 0;
+    return ["users", "services", "products", "clients", "appointments", "sales", "config", "product_sales"].indexOf(c) >= 0;
   }
 };
 function toDb(c, o) {
@@ -202,13 +202,10 @@ function toDb(c, o) {
     delete d.endTime;
     delete d.note;
   }
-  if (c === "sales") {
+  if (c === "sales" || c === "product_sales") {
     if (d.dueDate !== undefined) { d.due_date = d.dueDate; delete d.dueDate; }
     if (d.paidDate !== undefined) { d.paid_date = d.paidDate; delete d.paidDate; }
-    /* abonos: guardar como jsonb */
-    if (d.abonos !== undefined) {
-      d.abonos = Array.isArray(d.abonos) ? d.abonos : [];
-    }
+    if (d.abonos !== undefined) { d.abonos = Array.isArray(d.abonos) ? d.abonos : []; }
   }
   return d;
 }
@@ -247,11 +244,12 @@ function fromDb(c, o) {
     d.stId = d.st_id;
     delete d.st_id;
   }
-  if (c === "sales") {
+  if (c === "sales" || c === "product_sales") {
     if (d.due_date !== undefined) { d.dueDate = d.due_date; delete d.due_date; }
     if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
     if (d.abonos === undefined) d.abonos = [];
     if (d.pendiente === undefined) d.pendiente = 0;
+    try { if (typeof d.items === "string") d.items = JSON.parse(d.items); } catch(e) { d.items = []; }
   }
   return d;
 }
@@ -4154,6 +4152,8 @@ function Admin(p) {
     setAppts = p.setAppts;
   var sales = p.sales,
     setSales = p.setSales;
+  var prodSales = p.prodSales || [];
+  var setProdSales = p.setProdSales || function(){};
   var cfg = p.cfg,
     setCfg = p.setCfg;
   var onLogout = p.onLogout;
@@ -4241,6 +4241,9 @@ function Admin(p) {
   var cajFiltS = _useState("todas");
   var cajFilt = cajFiltS[0];
   var setCajFilt = cajFiltS[1];
+  var cajSubS = _useState("servicios");
+  var cajSub = cajSubS[0];
+  var setCajSub = cajSubS[1];
   var abonoMdlS = _useState(null);
   var abonoMdl = abonoMdlS[0];
   var setAbonoMdl = abonoMdlS[1];
@@ -5050,20 +5053,32 @@ function Admin(p) {
                 items: selProds.map(function (x) {
                   return x.qty > 1 ? x.name + " x" + x.qty : x.name;
                 }),
+                itemsDetail: selProds.map(function(x){return {id:x.id,name:x.name,price:x.price,qty:x.qty};}),
                 total: total,
                 method: mt === "debe" ? "debe" : mt,
                 dueDate: mt === "debe" ? dp : null,
                 date: today(),
                 auto: false
               };
-              setSales(function (x) {
+              setProdSales(function (x) {
                 return x.concat([item]);
               });
               closeM();
               _context11.p = 4;
               _context11.n = 5;
-              return DB.save("sales", item.id, item);
+              return DB.save("product_sales", item.id, item);
             case 5:
+              /* Descontar inventario por cada producto vendido */
+              selProds.forEach(function(sp){
+                var updated = prods.map(function(pr){
+                  if(pr.id !== sp.id) return pr;
+                  var newStock = Math.max(0, (pr.stock||0) - sp.qty);
+                  var updPr = Object.assign({}, pr, {stock: newStock});
+                  DB.save("products", pr.id, updPr).catch(function(e){console.error(e);});
+                  return updPr;
+                });
+                setProds(updated);
+              });
               _context11.n = 7;
               break;
             case 6:
@@ -5700,9 +5715,13 @@ function Admin(p) {
                   return ss.id === s.id ? upd : ss;
                 });
               });
+              /* Also update prodSales if this abono is from product_sales */
+              if(s._table === "product_sales") {
+                setProdSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
+              }
               _context13.p = 3;
               _context13.n = 4;
-              return DB.save("sales", upd.id, upd);
+              return DB.save(s._table === "product_sales" ? "product_sales" : "sales", upd.id, upd);
             case 4:
               _context13.n = 6;
               break;
@@ -7223,366 +7242,132 @@ function Admin(p) {
         d: {}
       });
     }
-  }, "+")), tab === "caja" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", {
-    style: {
-      fontSize: 15,
-      color: C.accent,
-      display: "block",
-      marginBottom: 12
-    }
-  }, "\uD83D\uDCB0 Caja & Ventas"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3,1fr)",
-      gap: 8,
-      marginBottom: 14
-    }
-  }, [["$" + totalV, "Total cobrado", C.accent], ["$" + visSales.filter(function (s) {
-    return s.method === "debe";
-  }).reduce(function (a, s) {
-    return a + s.total;
-  }, 0), "Por cobrar", C.warn], [visSales.filter(function (s) {
-    return s.method === "debe";
-  }).length, "Deudas", C.err]].map(function (x) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: x[1],
-      style: {
-        background: x[2] + "18",
-        border: "1px solid " + x[2] + "33",
-        borderRadius: 11,
-        padding: "10px 8px",
-        textAlign: "center"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 16,
-        fontWeight: 900,
-        color: x[2]
-      }
-    }, x[0]), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        color: C.muted,
-        marginTop: 2
-      }
-    }, x[1]));
-  })), visSales.filter(function (s) {
-    return s.method === "debe" && s.dueDate && s.dueDate < today();
-  }).length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.err + "18",
-      border: "1px solid " + C.err + "44",
-      borderRadius: 11,
-      padding: "9px 12px",
-      marginBottom: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 9
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 20
-    }
-  }, "\uD83D\uDEA8"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", {
-    style: {
-      color: C.err,
-      fontSize: 12
-    }
-  }, visSales.filter(function (s) {
-    return s.method === "debe" && s.dueDate && s.dueDate < today();
-  }).length, " deuda(s) vencida(s)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: C.muted
-    }
-  }, "Total: ", /*#__PURE__*/React.createElement("b", {
-    style: {
-      color: C.err
-    }
-  }, "$", visSales.filter(function (s) {
-    return s.method === "debe" && s.dueDate && s.dueDate < today();
-  }).reduce(function (a, s) {
-    return a + s.total;
-  }, 0))))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 5,
-      marginBottom: 12,
-      overflowX: "auto"
-    }
-  }, [["todas", "Todas"], ["debe", "⏳ Deudas"], ["pagadas", "✅ Pagadas"]].map(function (x) {
-    var active = cajFilt === x[0];
-    var cnt = x[0] === "todas" ? visSales.length : x[0] === "debe" ? visSales.filter(function (s) {
-      return s.method === "debe";
-    }).length : visSales.filter(function (s) {
-      return s.method !== "debe";
-    }).length;
-    return /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      key: x[0],
-      onClick: function onClick() {
-        setCajFilt(x[0]);
-      },
-      style: _objectSpread(_objectSpread({}, S.btn(active ? "gold" : "ghost")), {}, {
-        padding: "5px 11px",
-        fontSize: 11,
-        color: active ? "#000" : C.muted,
-        whiteSpace: "nowrap",
-        flexShrink: 0
-      })
-    }, x[1], /*#__PURE__*/React.createElement("span", {
-      style: {
-        background: active ? C.accent + "44" : C.border,
-        color: active ? "#000" : C.muted,
-        borderRadius: 10,
-        padding: "0 5px",
-        fontSize: 9,
-        marginLeft: 3
-      }
-    }, cnt));
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "desktop-2col"
-  }, (cajFilt === "debe" ? visSales.filter(function (s) {
-    return s.method === "debe";
-  }) : cajFilt === "pagadas" ? visSales.filter(function (s) {
-    return s.method !== "debe";
-  }) : visSales).map(function (s) {
-    var isDebt = s.method === "debe";
-    var isVencida = isDebt && s.dueDate && s.dueDate < today();
-    var abonos = s.abonos || [];
-    var totalAbonado = abonos.reduce(function (a, ab) {
-      return a + ab.monto;
-    }, 0);
-    var pendiente = isDebt ? s.pendiente !== undefined ? s.pendiente : s.total - totalAbonado : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: s.id,
-      style: _objectSpread(_objectSpread({}, S.card), {}, {
-        border: "1px solid " + (isVencida ? C.err + "66" : isDebt ? C.warn + "55" : C.border)
-      })
-    }, /*#__PURE__*/React.createElement("div", {
-      style: S.row
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1,
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("b", {
-      style: {
-        fontSize: 12
-      }
-    }, s.client), s.phone && /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: C.muted,
-        fontSize: 10
-      }
-    }, "\uD83D\uDCDE ", s.phone), /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: C.muted,
-        fontSize: 10,
-        marginTop: 1,
-        overflow: "hidden",
-        whiteSpace: "nowrap",
-        textOverflow: "ellipsis"
-      }
-    }, (s.items || []).join(", "))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "right",
-        flexShrink: 0,
-        marginLeft: 8
-      }
-    }, isDebt && totalAbonado > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", {
-      style: {
-        color: C.warn,
-        fontSize: 13
-      }
-    }, "$", pendiente, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 9,
-        color: C.muted
-      }
-    }, " pend.")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        color: C.ok
-      }
-    }, "Abonado: $", totalAbonado)) : /*#__PURE__*/React.createElement("b", {
-      style: {
-        color: isDebt ? C.warn : C.accent,
-        fontSize: 13
-      }
-    }, "$", s.total), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
-      style: S.badge(isDebt ? C.warn : C.ok)
-    }, s.auto ? "Auto" : "", " ", isDebt ? "⏳ Debe" : s.method)))), isDebt && totalAbonado > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 6
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: C.border,
-        borderRadius: 20,
-        height: 4,
-        overflow: "hidden"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: Math.min(100, s.total > 0 ? Math.round(totalAbonado / s.total * 100) : 0) + "%",
-        height: "100%",
-        background: "linear-gradient(90deg," + C.ok + "," + C.accent + ")",
-        borderRadius: 20
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        color: C.muted,
-        marginTop: 2
-      }
-    }, Math.round(totalAbonado / s.total * 100), "% \xB7 ", abonos.length, " abono", abonos.length > 1 ? "s" : "")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 5,
-        display: "flex",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: 4
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: C.muted,
-        fontSize: 10
-      }
-    }, "\uD83D\uDCC6 ", s.date), isDebt && s.dueDate && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: isVencida ? C.err : C.warn,
-        fontSize: 10,
-        fontWeight: 700
-      }
-    }, isVencida ? "🚨 Vencido:" : "Límite:", " ", s.dueDate), s.paidDate && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: C.ok,
-        fontSize: 10
-      }
-    }, "\u2705 Pagado: ", s.paidDate)), isDebt && isAdmin && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 7
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 6,
-        marginBottom: s.phone ? 6 : 0
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      style: _objectSpread(_objectSpread({}, S.btn("ghost")), {}, {
-        flex: 1,
-        padding: "7px",
-        fontSize: 11,
-        border: "1px solid " + C.warn + "55",
-        color: C.warn
-      }),
-      onClick: function onClick() {
-        setAbonoMdl(s);
-      }
-    }, "\uD83D\uDCB5 Abonar"), /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      style: _objectSpread(_objectSpread({}, S.btn("cyan")), {}, {
-        flex: 1,
-        padding: "7px",
-        fontSize: 11,
-        color: "#000"
-      }),
-      onClick: /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23() {
-        var upd, _t16;
-        return _regenerator().w(function (_context23) {
-          while (1) switch (_context23.p = _context23.n) {
-            case 0:
-              upd = Object.assign({}, s, {
-                method: "efectivo",
-                dueDate: null,
-                paidDate: today(),
-                abonos: [],
-                pendiente: 0
-              });
-              setSales(function (x) {
-                return x.map(function (ss) {
-                  return ss.id === s.id ? upd : ss;
-                });
-              });
-              _context23.p = 1;
-              _context23.n = 2;
-              return DB.save("sales", upd.id, upd);
-            case 2:
-              _context23.n = 4;
-              break;
-            case 3:
-              _context23.p = 3;
-              _t16 = _context23.v;
-              console.error(_t16);
-            case 4:
-              return _context23.a(2);
+  }, "+")), tab === "caja" && /*#__PURE__*/React.createElement("div", null,
+/*#__PURE__*/React.createElement("b", {style:{fontSize:15,color:C.accent,display:"block",marginBottom:12}}, "\uD83D\uDCB0 Caja & Ventas"),
+
+/* SUB-TABS */
+/*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:6,marginBottom:14}},
+  ["servicios","productos"].map(function(s){
+    var labels={servicios:"✂️ Servicios",productos:"📦 Productos"};
+    var active=cajSub===s;
+    return /*#__PURE__*/React.createElement("button",{key:s,type:"button",
+      style:Object.assign({},S.btn(active?"gold":"ghost"),{padding:"7px 16px",fontSize:12,color:active?"#000":C.muted,flex:1}),
+      onClick:function(){setCajSub(s);setCajFilt("todas");}
+    },labels[s]);
+  })
+),
+
+/* ── SERVICIOS ── */
+cajSub==="servicios" && /*#__PURE__*/React.createElement("div", null,
+  /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
+    [["$"+visSales.reduce(function(a,s){return a+s.total;},0),"Total servicios",C.accent],
+     ["$"+visSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){return a+s.total;},0),"Por cobrar",C.warn],
+     [visSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
+    ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:16,fontWeight:900,color:x[2]}},x[0]),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:C.muted,marginTop:2}},x[1])
+    );})
+  ),
+  /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:10,background:C.card,borderRadius:8,padding:"6px 12px"}},
+    "Las ventas de servicios se registran automáticamente al confirmar una cita"
+  ),
+  visSales.map(function(s){return /*#__PURE__*/React.createElement("div",{key:s.id,style:Object.assign({},S.card,{border:"1px solid "+(s.method==="debe"?C.warn+"55":C.border)})},
+    /*#__PURE__*/React.createElement("div",{style:S.row},
+      /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:0}},
+        /*#__PURE__*/React.createElement("b",{style:{fontSize:12}},s.client),
+        /*#__PURE__*/React.createElement("div",{style:{color:C.muted,fontSize:10,marginTop:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},
+        /*#__PURE__*/React.createElement("b",{style:{color:s.method==="debe"?C.warn:C.accent,fontSize:13}},"$",s.total),
+        /*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("span",{style:S.badge(s.method==="debe"?C.warn:C.ok)},s.auto?"Auto":"", " ",s.method==="debe"?"⏳ Debe":s.method))
+      )
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{marginTop:4,color:C.muted,fontSize:10}},"📆 ",s.date)
+  );})
+),
+
+/* ── PRODUCTOS ── */
+cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
+  /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
+    [["$"+prodSales.reduce(function(a,s){return a+s.total;},0),"Total productos",C.accent],
+     ["$"+prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){return a+s.total;},0),"Por cobrar",C.warn],
+     [prodSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
+    ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:16,fontWeight:900,color:x[2]}},x[0]),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:C.muted,marginTop:2}},x[1])
+    );})
+  ),
+
+  /* Filtros */
+  /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:5,marginBottom:12,overflowX:"auto"}},
+    [["todas","Todas"],["debe","\u23F3 Deudas"],["pagadas","\u2705 Pagadas"]].map(function(x){
+      var active=cajFilt===x[0];
+      var cnt=x[0]==="todas"?prodSales.length:x[0]==="debe"?prodSales.filter(function(s){return s.method==="debe";}).length:prodSales.filter(function(s){return s.method!=="debe";}).length;
+      return /*#__PURE__*/React.createElement("button",{key:x[0],type:"button",
+        style:Object.assign({},S.btn(active?"gold":"ghost"),{padding:"5px 11px",fontSize:11,color:active?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0}),
+        onClick:function(){setCajFilt(x[0]);}
+      },x[1],/*#__PURE__*/React.createElement("span",{style:{background:active?C.accent+"44":C.border,color:active?"#000":C.muted,borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:3}},cnt));
+    })
+  ),
+
+  /* Lista */
+  /*#__PURE__*/React.createElement("div",{className:"desktop-2col"},
+  (cajFilt==="debe"?prodSales.filter(function(s){return s.method==="debe";}):cajFilt==="pagadas"?prodSales.filter(function(s){return s.method!=="debe";}):prodSales).map(function(s){
+    var isDebt=s.method==="debe";
+    var isVencida=isDebt&&s.dueDate&&s.dueDate<today();
+    var abonos=s.abonos||[];
+    var totalAbonado=abonos.reduce(function(a,ab){return a+ab.monto;},0);
+    var pendiente=isDebt?(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado):0;
+    return /*#__PURE__*/React.createElement("div",{key:s.id,style:Object.assign({},S.card,{border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)})},
+      /*#__PURE__*/React.createElement("div",{style:S.row},
+        /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:0}},
+          /*#__PURE__*/React.createElement("b",{style:{fontSize:12}},s.client),
+          s.phone&&/*#__PURE__*/React.createElement("div",{style:{color:C.muted,fontSize:10}},"\uD83D\uDCDE ",s.phone),
+          /*#__PURE__*/React.createElement("div",{style:{color:C.muted,fontSize:10,marginTop:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))
+        ),
+        /*#__PURE__*/React.createElement("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},
+          isDebt&&totalAbonado>0
+            ?/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("b",{style:{color:C.warn,fontSize:13}},"$",pendiente,/*#__PURE__*/React.createElement("span",{style:{fontSize:9,color:C.muted}}," pend.")),/*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:C.ok}},"Abonado: $",totalAbonado))
+            :/*#__PURE__*/React.createElement("b",{style:{color:isDebt?C.warn:C.accent,fontSize:13}},"$",s.total),
+          /*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("span",{style:S.badge(isDebt?C.warn:C.ok)},isDebt?"\u23F3 Debe":s.method))
+        )
+      ),
+      isDebt&&totalAbonado>0&&/*#__PURE__*/React.createElement("div",{style:{marginTop:6}},
+        /*#__PURE__*/React.createElement("div",{style:{background:C.border,borderRadius:20,height:4,overflow:"hidden"}},
+          /*#__PURE__*/React.createElement("div",{style:{width:Math.min(100,s.total>0?Math.round(totalAbonado/s.total*100):0)+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}})
+        )
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{marginTop:5,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}},
+        /*#__PURE__*/React.createElement("span",{style:{color:C.muted,fontSize:10}},"\uD83D\uDCC6 ",s.date),
+        isDebt&&s.dueDate&&/*#__PURE__*/React.createElement("span",{style:{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}},isVencida?"\uD83D\uDEA8 Vencido:":"L\u00edmite:"," ",s.dueDate),
+        s.paidDate&&/*#__PURE__*/React.createElement("span",{style:{color:C.ok,fontSize:10}},"\u2705 Pagado: ",s.paidDate)
+      ),
+      isDebt&&isAdmin&&/*#__PURE__*/React.createElement("div",{style:{marginTop:7}},
+        /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:6,marginBottom:s.phone?6:0}},
+          /*#__PURE__*/React.createElement("button",{type:"button",style:Object.assign({},S.btn("ghost"),{flex:1,padding:"7px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn}),onClick:function(){setAbonoMdl(Object.assign({},s,{_table:"product_sales"}));}},"\uD83D\uDCB5 Abonar"),
+          /*#__PURE__*/React.createElement("button",{type:"button",style:Object.assign({},S.btn("cyan"),{flex:1,padding:"7px",fontSize:11,color:"#000"}),onClick:function(){
+            var upd=Object.assign({},s,{method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0});
+            setProdSales(function(x){return x.map(function(ss){return ss.id===s.id?upd:ss;});});
+            DB.save("product_sales",upd.id,upd).catch(function(e){console.error(e);});
+          }},"\u2705 Pago total")
+        ),
+        s.phone&&/*#__PURE__*/React.createElement("button",{type:"button",
+          style:{width:"100%",background:"#25D366",border:"none",borderRadius:10,padding:"8px",fontSize:12,color:"#fff",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7},
+          onClick:function(){
+            var msg="Hola "+s.client+" \uD83D\uDC4B\n\nTe recordamos que tienes un saldo pendiente:\n\n\uD83D\uDCCB *Productos:* "+(s.items||[]).join(", ")+"\n\uD83D\uDCB0 *Total:* $"+s.total+"\n"+(totalAbonado>0?"\u2705 *Abonado:* $"+totalAbonado+"\n":"")+(pendiente>0?"\u23F3 *Pendiente:* $"+pendiente+"\n":"")+(s.dueDate?"\n\uD83D\uDCC5 *Fecha l\u00edmite:* "+s.dueDate+"\n":"")+"\nPuedes acercarte a cancelar cuando gustes. \uD83D\uDE4F";
+            var phone=s.phone.replace(/\D/g,"");
+            if(phone.length===10)phone="57"+phone;
+            window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
           }
-        }, _callee23, null, [[1, 3]]);
-      }))
-    }, "\u2705 Pago total")), s.phone && /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      style: {
-        width: "100%",
-        background: "#25D366",
-        border: "none",
-        borderRadius: 10,
-        padding: "8px",
-        fontSize: 12,
-        color: "#fff",
-        fontWeight: 700,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 7
-      },
-      onClick: function onClick() {
-        var abonos = s.abonos || [];
-        var totalAbonado = abonos.reduce(function (a, ab) {
-          return a + ab.monto;
-        }, 0);
-        var pendiente = s.pendiente !== undefined ? s.pendiente : s.total - totalAbonado;
-        var msg = "Hola " + s.client + " 👋\n\nTe recordamos que tienes un saldo pendiente con nosotros:\n\n📋 *Productos:* " + (s.items || []).join(", ") + "\n💰 *Total:* $" + s.total + "\n" + (totalAbonado > 0 ? "✅ *Abonado:* $" + totalAbonado + "\n" : "") + "⏳ *Pendiente:* $" + pendiente + "\n" + (s.dueDate ? "\n📅 *Fecha límite:* " + s.dueDate + "\n" : "") + "\nPuedes acercarte a cancelar cuando gustes. ¡Gracias! 🙏";
-        var phone = s.phone.replace(/\D/g, "");
-        if (phone.length === 10) phone = "57" + phone;
-        window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(msg), "_blank");
-      }
-    }, /*#__PURE__*/React.createElement("svg", {
-      width: "14",
-      height: "14",
-      viewBox: "0 0 24 24",
-      fill: "white"
-    }, /*#__PURE__*/React.createElement("path", {
-      d: "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
-    })), "\uD83D\uDCF2 Enviar recordatorio por WhatsApp")));
-  })), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    style: {
-      position: "fixed",
-      bottom: 80,
-      right: 18,
-      background: C.accent,
-      color: "#000",
-      border: "none",
-      borderRadius: "50%",
-      width: 48,
-      height: 48,
-      fontSize: 22,
-      cursor: "pointer",
-      fontWeight: 900,
-      boxShadow: "0 4px 14px #c9a84c55",
-      zIndex: 99
-    },
-    onClick: function onClick() {
-      setMdl({
-        type: "sale",
-        d: {}
-      });
-    }
-  }, "+")), tab === "reportes" && /*#__PURE__*/React.createElement(Reportes, {
+        },/*#__PURE__*/React.createElement("svg",{width:14,height:14,viewBox:"0 0 24 24",fill:"white"},/*#__PURE__*/React.createElement("path",{d:"M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"}))," \uD83D\uDCF2 Enviar recordatorio por WhatsApp")
+      )
+    );
+  })
+  ),
+  prodSales.length===0&&/*#__PURE__*/React.createElement("div",{style:{textAlign:"center",padding:"24px",color:C.muted,fontSize:12,background:C.card,borderRadius:12}},"Sin ventas de productos"),
+
+  /*#__PURE__*/React.createElement("button",{type:"button",style:{position:"fixed",bottom:80,right:18,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:48,height:48,fontSize:22,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 14px #c9a84c55",zIndex:99},onClick:function(){setMdl({type:"sale",d:{}});}},"+")
+)), tab === "reportes" && /*#__PURE__*/React.createElement(Reportes, {
     appts: visAppts,
     sales: visSales,
     clients: visClients,
@@ -8120,6 +7905,9 @@ function App() {
   var salS = _useState([]);
   var sales = salS[0];
   var setSales = salS[1];
+  var psalS = _useState([]);
+  var prodSales = psalS[0];
+  var setProdSales = psalS[1];
   var cfgS = _useState(DEF_CFG);
   var cfg = cfgS[0];
   var setCfg = cfgS[1];
@@ -8317,6 +8105,8 @@ function App() {
     setAppts: setAppts,
     sales: sales,
     setSales: setSales,
+    prodSales: prodSales,
+    setProdSales: setProdSales,
     cfg: cfg,
     setCfg: setCfg,
     onLogout: function onLogout() {
