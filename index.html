@@ -2919,7 +2919,16 @@ function Public(p) {
   /* Subtítulo — custom o default */
   /*#__PURE__*/React.createElement("div", {style: {fontSize: 10, color: C.cyan, letterSpacing: 4, marginTop: 2}},
     cfg && cfg.businessSubtitle ? cfg.businessSubtitle.toUpperCase() : "BARBER & TATTOO STUDIO"
-  )), /*#__PURE__*/React.createElement("div", {
+  ),
+  /* Powered by TASECA — solo si hay nombre personalizado */
+  cfg && cfg.businessName ? /*#__PURE__*/React.createElement("div", {
+    style: {display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 10, opacity: 0.55}
+  },
+    /*#__PURE__*/React.createElement("span", {style: {fontSize: 8, color: C.muted, letterSpacing: 1}}, "POWERED BY"),
+    /*#__PURE__*/React.createElement(Logo, {size: 12}),
+    /*#__PURE__*/React.createElement("span", {style: {fontSize: 9, fontWeight: 900, background: "linear-gradient(90deg,#c9a84c,#4ecdc4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"}}, "TASECA")
+  ) : null
+  ), /*#__PURE__*/React.createElement("div", {
     id: "pub-tabs-wrap"
   }, /*#__PURE__*/React.createElement("div", {
     id: "pub-tabs"
@@ -3826,6 +3835,8 @@ function Public(p) {
   }, "Agendar otra cita"))))), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onAdmin,
+    onContextMenu: function(e){ e.preventDefault(); onSuperAdmin && onSuperAdmin(); },
+    title: "Staff login",
     style: {
       position: "fixed",
       bottom: 14,
@@ -8151,6 +8162,13 @@ function App() {
       marginTop: 7
     }
   }, "Conectando..."));
+  if (scr === "superlogin") return /*#__PURE__*/React.createElement(SuperLogin, {
+    onLogin: function(){ setScr("superadmin"); },
+    onBack: function(){ setScr("public"); }
+  });
+  if (scr === "superadmin") return /*#__PURE__*/React.createElement(SuperAdmin, {
+    onLogout: function(){ setScr("public"); }
+  });
   if (scr === "login") return /*#__PURE__*/React.createElement(Login, {
     users: users,
     onLogin: function onLogin(u) {
@@ -8198,6 +8216,9 @@ function App() {
     onAdmin: function onAdmin() {
       setScr("login");
     },
+    onSuperAdmin: function onSuperAdmin() {
+      setScr("superlogin");
+    },
     onReg: function onReg(c) {
       setClients(function (x) {
         return x.concat([c]);
@@ -8205,6 +8226,226 @@ function App() {
     }
   });
 }
-ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));</script>
+
+/* ═══ SUPER ADMIN ═══════════════════════════════════════════════ */
+var SA_PWD_HASH = "7564cd9fa08551e5ba2e9080fa9a402104501bc1fbeb71763d8ce43bfd6a93bc";
+
+function SuperLogin(p) {
+  var pwdS=_useState(""),pwd=pwdS[0],setPwd=pwdS[1];
+  var errS=_useState(""),err=errS[0],setErr=errS[1];
+  var loadS=_useState(false),load=loadS[0],setLoad=loadS[1];
+  var showS=_useState(false),show=showS[0],setShow=showS[1];
+
+  function login(){
+    return _asyncToGenerator(function*(){
+      setErr(""); setLoad(true);
+      try {
+        var enc=new TextEncoder();
+        var buf=yield crypto.subtle.digest("SHA-256",enc.encode(pwd));
+        var hex=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
+        if(hex===SA_PWD_HASH) p.onLogin();
+        else { setErr("Contraseña incorrecta"); setPwd(""); }
+      } catch(e){ setErr("Error"); }
+      setLoad(false);
+    })();
+  }
+
+  var ce=React.createElement;
+  return ce("div",{style:{minHeight:"100vh",width:"100%",background:"linear-gradient(160deg,#080c10,#0d1520)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}},
+    ce("div",{style:{width:"100%",maxWidth:400}},
+      ce("div",{style:{textAlign:"center",marginBottom:28}},
+        ce(Logo,{size:56}),
+        ce("div",{style:{fontSize:11,color:C.err,fontWeight:900,letterSpacing:3,marginTop:8}},"⬡ SUPER ADMIN"),
+        ce("div",{style:{fontSize:18,fontWeight:900,color:C.accent,marginTop:4}},"TASECA Master Panel"),
+        ce("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"Gestión central de empresas")
+      ),
+      ce("div",{style:{background:C.card,border:"1px solid "+C.err+"44",borderRadius:14,padding:"20px 16px 24px"}},
+        ce("label",{style:S.lbl},"Contraseña maestra"),
+        ce("div",{style:{position:"relative",marginBottom:12}},
+          ce("input",{style:Object.assign({},S.inp,{paddingRight:44}),type:show?"text":"password",placeholder:"Contraseña alfanumérica",value:pwd,
+            onChange:function(e){setPwd(e.target.value);setErr("");},
+            onKeyDown:function(e){if(e.key==="Enter")login();}}),
+          ce("button",{type:"button",style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16},
+            onClick:function(){setShow(function(v){return !v;});}},show?"🙈":"👁️")
+        ),
+        err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 12px",fontSize:12,color:C.err,marginBottom:10}},"⚠️ ",err),
+        ce("button",{type:"button",style:{background:C.err,border:"none",borderRadius:10,padding:"11px",fontSize:14,color:"#fff",fontWeight:700,cursor:"pointer",width:"100%",opacity:load?0.6:1},
+          onClick:login,disabled:load},load?"Verificando...":"Ingresar al panel"),
+        ce("button",{type:"button",style:{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",width:"100%",marginTop:10,textAlign:"center"},
+          onClick:p.onBack},"← Volver al inicio")
+      )
+    )
+  );
+}
+
+function SuperAdmin(p) {
+  var companiesS=_useState([]),companies=companiesS[0],setCompanies=companiesS[1];
+  var loadingS=_useState(true),loading=loadingS[0],setLoading=loadingS[1];
+  var mdlS=_useState(false),mdl=mdlS[0],setMdl=mdlS[1];
+
+  _useEffect(function(){
+    fetch(window.SB_URL+"/rest/v1/company?select=*&order=id.asc",{headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY}})
+      .then(function(r){return r.json();})
+      .then(function(d){setCompanies(Array.isArray(d)?d:[]);setLoading(false);})
+      .catch(function(){setLoading(false);});
+  },[]);
+
+  function NewCompanyMdl(){
+    var nameS=_useState(""),name=nameS[0],setName=nameS[1];
+    var slugS=_useState(""),slug=slugS[0],setSlug=slugS[1];
+    var typeS=_useState("barberia"),type=typeS[0],setType=typeS[1];
+    var pinS=_useState("0000"),pin=pinS[0],setPin=pinS[1];
+    var errS=_useState(""),err=errS[0],setErr=errS[1];
+    var loadS=_useState(false),load=loadS[0],setLoad=loadS[1];
+
+    function save(){
+      return _asyncToGenerator(function*(){
+        setErr(""); setLoad(true);
+        if(!name.trim()){setErr("Nombre obligatorio");setLoad(false);return;}
+        if(!slug.trim()||!/^[a-z0-9-]+$/.test(slug)){setErr("Slug: solo letras minúsculas, números y guiones");setLoad(false);return;}
+        if(companies.some(function(c){return c.company_id===slug;})){setErr("Ese subdominio ya existe");setLoad(false);return;}
+        try {
+          var enc=new TextEncoder();
+          var buf=yield crypto.subtle.digest("SHA-256",enc.encode(pin));
+          var hashedPin=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
+          var compId=Date.now();
+          var coRes=yield fetch(window.SB_URL+"/rest/v1/company",{method:"POST",
+            headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
+            body:JSON.stringify({id:compId,company_name:name.trim(),company_id:slug,active:true,plan:type})});
+          if(!coRes.ok){var t=yield coRes.text();throw new Error(t);}
+          var newCo=(yield coRes.json())[0];
+          yield fetch(window.SB_URL+"/rest/v1/users",{method:"POST",
+            headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
+            body:JSON.stringify({id:"u_"+compId+"_admin",name:"Admin",role:"admin",pin:hashedPin,photo:null,work_days:[1,2,3,4,5,6],w_start:"08:00",w_end:"21:00",blocks:{},company_id:newCo.id})});
+          yield fetch(window.SB_URL+"/rest/v1/config",{method:"POST",
+            headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
+            body:JSON.stringify({id:"cfg_"+compId,stamps_on:true,company_id:newCo.id})});
+          setCompanies(function(x){return x.concat([newCo]);});
+          setMdl(false);
+        } catch(e){setErr("Error: "+e.message);}
+        setLoad(false);
+      })();
+    }
+
+    var ce=React.createElement;
+    var TYPES=[{v:"barberia",l:"Barbería"},{v:"tatuaje",l:"Tatuaje"},{v:"mixto",l:"Mixto"},{v:"estetica",l:"Estética"}];
+    return ce("div",{style:S.ov,onClick:function(){setMdl(false);}},
+      ce("div",{style:S.mb,onClick:function(e){e.stopPropagation();}},
+        ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+          ce("b",{style:{fontSize:15,color:C.accent}},"🏢 Nueva Empresa"),
+          ce("button",{type:"button",onClick:function(){setMdl(false);},style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}},"✕")
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Nombre del negocio *"),
+          ce("input",{style:S.inp,placeholder:"Barbería El Rey",value:name,onChange:function(e){setName(e.target.value);}})
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Subdominio *"),
+          ce("div",{style:{display:"flex",alignItems:"center",gap:6}},
+            ce("input",{style:S.inp,placeholder:"elrey",value:slug,onChange:function(e){setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,""));}}),
+            ce("span",{style:{fontSize:11,color:C.muted,whiteSpace:"nowrap"}},".taseca.tech")
+          ),
+          slug&&ce("div",{style:{fontSize:10,color:C.cyan,marginTop:4}},"→ ",slug,".taseca.tech")
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Tipo"),
+          ce("select",{style:S.inp,value:type,onChange:function(e){setType(e.target.value);}},
+            TYPES.map(function(t){return ce("option",{key:t.v,value:t.v},t.l);}))
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"PIN Admin (4 dígitos)"),
+          ce("input",{style:S.inp,placeholder:"0000",value:pin,onChange:function(e){setPin(e.target.value);}})
+        ),
+        err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},"⚠️ ",err),
+        ce("div",{style:{display:"flex",gap:10,marginTop:8}},
+          ce("button",{type:"button",style:{flex:1,background:"transparent",border:"1px solid "+C.border,borderRadius:10,padding:"9px",color:C.muted,cursor:"pointer"},onClick:function(){setMdl(false);}},"Cancelar"),
+          ce("button",{type:"button",style:{flex:2,background:C.accent,border:"none",borderRadius:10,padding:"9px",color:"#000",fontWeight:700,cursor:"pointer",opacity:load?0.6:1},onClick:save,disabled:load},load?"Creando...":"✅ Crear empresa")
+        )
+      )
+    );
+  }
+
+  var ce=React.createElement;
+  var ICONS={barberia:"💈",tatuaje:"🪡",mixto:"💈",estetica:"💅"};
+  var COLORS={barberia:C.cyan,tatuaje:"#8e44ad",mixto:C.accent,estetica:"#e91e63"};
+  var LABELS={barberia:"Barbería",tatuaje:"Tatuaje",mixto:"Mixto",estetica:"Estética"};
+
+  return ce("div",{style:{background:"linear-gradient(160deg,#080c10,#0d1520)",minHeight:"100vh",width:"100%",color:C.text}},
+    /* Header */
+    ce("div",{style:{background:"linear-gradient(135deg,#0d1520,#080c10)",padding:"14px 16px",borderBottom:"2px solid "+C.err+"44"}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        ce("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          ce(Logo,{size:28}),
+          ce("div",null,
+            ce("div",{style:{fontSize:14,fontWeight:900,color:C.accent}},"TASECA"),
+            ce("div",{style:{fontSize:9,color:C.err,fontWeight:700,letterSpacing:2}},"⬡ SUPER ADMIN")
+          )
+        ),
+        ce("button",{type:"button",style:{background:C.border,border:"none",borderRadius:9,padding:"5px 12px",color:C.muted,fontSize:11,cursor:"pointer"},onClick:p.onLogout},"← Salir")
+      )
+    ),
+    /* KPIs */
+    ce("div",{style:{padding:"16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}},
+      [[companies.length,"🏢","Total",C.accent],
+       [companies.filter(function(c){return c.active!==false;}).length,"✅","Activas",C.ok],
+       [companies.filter(function(c){return c.active===false;}).length,"🔒","Inactivas",C.muted]
+      ].map(function(x){
+        return ce("div",{key:x[2],style:{background:x[3]+"18",border:"1px solid "+x[3]+"33",borderRadius:12,padding:"12px 8px",textAlign:"center"}},
+          ce("div",{style:{fontSize:22,fontWeight:900,color:x[3]}},x[0]),
+          ce("div",{style:{fontSize:9,color:C.muted,marginTop:2}},x[2])
+        );
+      })
+    ),
+    /* Lista */
+    ce("div",{style:{padding:"0 16px 100px"}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        ce("b",{style:{fontSize:14,color:C.accent}},"🏢 Empresas registradas"),
+        ce("button",{type:"button",style:{background:C.accent,border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,color:"#000",fontWeight:700,cursor:"pointer"},
+          onClick:function(){setMdl(true);}
+        },"+ Nueva empresa")
+      ),
+      loading&&ce("div",{style:{textAlign:"center",padding:"32px",color:C.muted}},"⏳ Cargando..."),
+      !loading&&companies.length===0&&ce("div",{style:{textAlign:"center",padding:"40px",background:C.card,borderRadius:14,border:"1px dashed "+C.border}},
+        ce("div",{style:{fontSize:40,marginBottom:10}},"🏢"),
+        ce("b",{style:{color:C.muted}},"Sin empresas registradas")
+      ),
+      companies.map(function(co){
+        var tc=COLORS[co.plan]||C.accent;
+        var active=co.active!==false;
+        return ce("div",{key:co.id,style:{background:C.card,border:"1px solid "+(active?tc+"44":C.border),borderRadius:14,padding:"13px 15px",marginBottom:10,opacity:active?1:0.6}},
+          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+            ce("div",{style:{display:"flex",alignItems:"center",gap:10}},
+              ce("div",{style:{width:42,height:42,borderRadius:11,background:tc+"22",border:"1px solid "+tc+"44",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}},
+                ICONS[co.plan]||"🏢"),
+              ce("div",null,
+                ce("b",{style:{fontSize:14}},co.company_name),
+                ce("div",{style:{fontSize:11,color:C.cyan,marginTop:1}},co.company_id,".taseca.tech"),
+                ce("div",{style:{fontSize:10,color:C.muted}},LABELS[co.plan]||co.plan)
+              )
+            ),
+            ce("span",{style:{background:(active?C.ok:C.muted)+"22",color:active?C.ok:C.muted,fontSize:11,padding:"2px 8px",borderRadius:20,fontWeight:600}},active?"Activa":"Inactiva")
+          ),
+          ce("div",{style:{display:"flex",gap:6,marginTop:10}},
+            ce("button",{type:"button",style:{flex:1,background:C.cyan,border:"none",borderRadius:10,padding:"6px",fontSize:11,color:"#000",fontWeight:700,cursor:"pointer"},
+              onClick:function(){window.open("https://"+co.company_id+".taseca.tech","_blank");}
+            },"🚀 Abrir"),
+            ce("button",{type:"button",style:{flex:1,background:"transparent",border:"1px solid "+C.border,borderRadius:10,padding:"6px",fontSize:11,color:C.muted,cursor:"pointer"},
+              onClick:function(){
+                fetch(window.SB_URL+"/rest/v1/company?id=eq."+co.id,{method:"PATCH",
+                  headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json"},
+                  body:JSON.stringify({active:!active})});
+                setCompanies(function(x){return x.map(function(c){return c.id===co.id?Object.assign({},c,{active:!active}):c;});});
+              }
+            },active?"Desactivar":"Activar")
+          )
+        );
+      })
+    ),
+    mdl&&ce(NewCompanyMdl,null)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+</script>
 </body>
 </html>
