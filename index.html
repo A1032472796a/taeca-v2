@@ -1220,7 +1220,7 @@ function Login(p){
         var hashHex=hashArray.map(function(b){return b.toString(16).padStart(2,"0");}).join("");
         /* Comparar hash con el PIN guardado (puede ser hash o texto plano) */
         var storedPin=sel.pin||"";
-        var match = storedPin===hashHex || storedPin===np;
+        var match = storedPin === hashHex;
         if(match)p.onLogin(sel);
         else{setErr("PIN incorrecto");setPin("");}
       },200);
