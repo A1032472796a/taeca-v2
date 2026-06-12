@@ -571,7 +571,7 @@ function WeekCal(p){
           {/* Time rows */}
           {hrs.map(function(hr){return [0,30].map(function(mn){
             var slotKey=hr+"-"+mn;
-            return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid "+C.border+"18",minHeight:view==="day"?44:28}}>
+            return <div key={slotKey} style={{display:"flex",borderBottom:"1px solid #ffffff22",minHeight:view==="day"?44:28}}>
               <div style={{width:36,flexShrink:0,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:2}}>
                 {mn===0&&<span style={{fontSize:8,color:C.muted}}>{hr}:00</span>}
               </div>
@@ -583,7 +583,7 @@ function WeekCal(p){
                 var isToday=ds===today();
                 return <div key={di}
                   onClick={function(){if(a)onAppt(a);else if(iw&&!ib)onSlot(d,hr,mn,stId);}}
-                  style={{flex:1,borderLeft:"1px solid "+C.border+"18",position:"relative",background:!iw?"#0a0c10":ib?"#1a0808":isToday&&view==="day"?"#12181f":"transparent",cursor:iw&&!ib?"pointer":"default"}}>
+                  style={{flex:1,borderLeft:"1px solid #ffffff22",position:"relative",background:!iw?"#0a0c10":ib?"#1a0808":isToday&&view==="day"?"#12181f":"transparent",cursor:iw&&!ib?"pointer":"default"}}>
                   {/* Empty slot hint on day view */}
                   {view==="day"&&iw&&!ib&&!a&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity .15s"}} className="slot-hint">
                   </div>}
