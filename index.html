@@ -193,6 +193,9 @@ function toDb(c, o) {
     if (d.blocks !== undefined) {
       d.blocks = typeof d.blocks === "string" ? JSON.parse(d.blocks) : d.blocks || {};
     }
+    /* lunch: guardado dentro de blocks para no necesitar columnas extra */
+    if (d.blocks && d.lunchStart !== undefined) { d.blocks._lunchStart = d.lunchStart || null; delete d.lunchStart; }
+    if (d.blocks && d.lunchEnd !== undefined) { d.blocks._lunchEnd = d.lunchEnd || null; delete d.lunchEnd; }
   }
   if (c === "config" && d.stampsOn !== undefined) {
     d.stamps_on = d.stampsOn;
@@ -248,6 +251,9 @@ function fromDb(c, o) {
     } catch (e) {
       d.blocks = {};
     }
+    /* extraer lunch de blocks */
+    d.lunchStart = d.blocks._lunchStart || "";
+    d.lunchEnd = d.blocks._lunchEnd || "";
   }
   if (c === "config" && d.stamps_on !== undefined) {
     d.stampsOn = !!d.stamps_on;
