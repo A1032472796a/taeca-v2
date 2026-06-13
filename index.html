@@ -5198,21 +5198,16 @@ function Admin(p) {
       }
     }
     function addProd(pr) {
+      var stock = pr.stock !== undefined ? pr.stock : 999;
+      if (stock <= 0) { setErr("Sin stock: \"" + pr.name + "\" no tiene unidades disponibles"); return; }
       setSelProds(function (prev) {
-        var ex = prev.filter(function (x) {
-          return x.id === pr.id;
-        });
-        if (ex.length > 0) return prev.map(function (x) {
-          return x.id === pr.id ? Object.assign({}, x, {
-            qty: x.qty + 1
-          }) : x;
-        });
-        return prev.concat([{
-          id: pr.id,
-          name: pr.name,
-          price: pr.price,
-          qty: 1
-        }]);
+        var ex = prev.filter(function (x) { return x.id === pr.id; });
+        if (ex.length > 0) {
+          var curQty = ex[0].qty;
+          if (curQty >= stock) { setErr("Stock insuficiente: solo " + stock + " unidad(es) de \"" + pr.name + "\""); return prev; }
+          return prev.map(function (x) { return x.id === pr.id ? Object.assign({}, x, { qty: x.qty + 1 }) : x; });
+        }
+        return prev.concat([{ id: pr.id, name: pr.name, price: pr.price, qty: 1, stock: stock }]);
       });
       setSearch("");
       setShowList(false);
@@ -5222,9 +5217,10 @@ function Admin(p) {
         return prev.map(function (x) {
           if (x.id !== id) return x;
           var nq = x.qty + delta;
-          return nq <= 0 ? null : Object.assign({}, x, {
-            qty: nq
-          });
+          if (nq <= 0) return null;
+          var maxStock = x.stock !== undefined ? x.stock : 999;
+          if (nq > maxStock) { setErr("Stock insuficiente: solo " + maxStock + " unidad(es) disponibles"); return x; }
+          return Object.assign({}, x, { qty: nq });
         }).filter(Boolean);
       });
     }
@@ -5497,22 +5493,20 @@ function Admin(p) {
         fontSize: 12
       }
     }, "Sin productos que coincidan"), filteredProds.map(function (pr) {
-      var inCart = selProds.some(function (x) {
-        return x.id === pr.id;
-      });
+      var inCart = selProds.some(function (x) { return x.id === pr.id; });
+      var sinStock = (pr.stock !== undefined && pr.stock <= 0);
       return /*#__PURE__*/React.createElement("div", {
         key: pr.id,
-        onMouseDown: function onMouseDown() {
-          addProd(pr);
-        },
+        onMouseDown: function onMouseDown() { if (!sinStock) addProd(pr); },
         style: {
           padding: "9px 13px",
-          cursor: "pointer",
+          cursor: sinStock ? "not-allowed" : "pointer",
           borderBottom: "1px solid " + C.border + "44",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          background: inCart ? C.accent + "18" : "transparent"
+          opacity: sinStock ? 0.45 : 1,
+          background: sinStock ? C.err+"0a" : inCart ? C.accent + "18" : "transparent"
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -5531,7 +5525,7 @@ function Admin(p) {
           color: pr.stock < 5 ? C.err : C.muted,
           marginLeft: 8
         }
-      }, "Stock: ", pr.stock)), /*#__PURE__*/React.createElement("div", {
+      }, sinStock ? "Agotado" : ("Stock: " + pr.stock))), /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
           alignItems: "center",
