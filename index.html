@@ -7822,19 +7822,24 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
       confirmAppt(adet);
     }
   }, "\u2713 Confirmar"),
-  adet.phone && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    style: {background:"#25D366",border:"none",borderRadius:10,padding:"9px 10px",fontSize:12,color:"#fff",fontWeight:700,cursor:"pointer",flex:1},
-    onClick: function() {
-      var staffName = "";
-      for (var _i=0; _i<users.length; _i++) { if (users[_i].id === adet.stId) { staffName = users[_i].name; break; } }
-      var biz = (cfg && cfg.businessName && cfg.businessName.trim()) ? cfg.businessName.trim() : "Taseca";
-      var msg = "Hola " + adet.client + " \ud83d\udc4b\n\nTe recordamos tu cita en *" + biz + "*:\n\n\u2702\ufe0f *Servicio:* " + adet.svc + "\n\ud83d\udc64 *Profesional:* " + (staffName||"Tu profesional") + "\n\ud83d\udcc5 *Fecha:* " + adet.date + "\n\u23f0 *Hora:* " + adet.time + "\n\n\u00a1Te esperamos! \ud83d\udc88";
-      var phone = adet.phone.replace(/[^0-9]/g,"");
-      if (phone.length===10) phone="57"+phone;
-      window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
-    }
-  }, "\ud83d\udcf2 WA Recordatorio"),
+  (function(){
+    var _adetPhone = adet.phone || "";
+    if (!_adetPhone) { for (var _ci=0; _ci<clients.length; _ci++) { if (clients[_ci].name===adet.client) { _adetPhone=clients[_ci].phone||""; break; } } }
+    if (!_adetPhone) return null;
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      style: {background:"#25D366",border:"none",borderRadius:10,padding:"9px 10px",fontSize:12,color:"#fff",fontWeight:700,cursor:"pointer",flex:1},
+      onClick: function() {
+        var staffName = "";
+        for (var _i=0; _i<users.length; _i++) { if (users[_i].id === adet.stId) { staffName = users[_i].name; break; } }
+        var biz = (cfg && cfg.businessName && cfg.businessName.trim()) ? cfg.businessName.trim() : "Taseca";
+        var msg = "Hola " + adet.client + " \ud83d\udc4b\n\nTe recordamos tu cita en *" + biz + "*:\n\n\u2702\ufe0f *Servicio:* " + adet.svc + "\n\ud83d\udc64 *Profesional:* " + (staffName||"Tu profesional") + "\n\ud83d\udcc5 *Fecha:* " + adet.date + "\n\u23f0 *Hora:* " + adet.time + "\n\n\u00a1Te esperamos! \ud83d\udc88";
+        var phone = _adetPhone.replace(/[^0-9]/g,"");
+        if (phone.length===10) phone="57"+phone;
+        window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
+      }
+    }, "\ud83d\udcf2 WA Recordatorio");
+  })(),
   /*#__PURE__*/React.createElement("button", {
     type: "button",
     style: _objectSpread(_objectSpread({}, S.btn("err")), {}, {
