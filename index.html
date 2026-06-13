@@ -218,6 +218,8 @@ function toDb(c, o) {
     if (d.dueDate !== undefined) { d.due_date = d.dueDate; delete d.dueDate; }
     if (d.paidDate !== undefined) { d.paid_date = d.paidDate; delete d.paidDate; }
     if (d.abonos !== undefined) { d.abonos = Array.isArray(d.abonos) ? d.abonos : []; }
+    /* ✅ FIX1: persistir pendiente como número */
+    if (d.pendiente !== undefined && d.pendiente !== null) { d.pendiente = Number(d.pendiente); }
   }
   return d;
 }
@@ -265,7 +267,15 @@ function fromDb(c, o) {
     if (d.due_date !== undefined) { d.dueDate = d.due_date; delete d.due_date; }
     if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
     if (d.abonos === undefined) d.abonos = [];
-    if (d.pendiente === undefined) d.pendiente = 0;
+    /* ✅ FIX2: recalcular pendiente correctamente al cargar desde DB */
+    var _abs = Array.isArray(d.abonos) ? d.abonos : [];
+    var _totalAbonado = _abs.reduce(function(a, x){ return a + (Number(x.monto)||0); }, 0);
+    if (d.pendiente === undefined || d.pendiente === null) {
+      d.pendiente = Math.max(0, (Number(d.total)||0) - _totalAbonado);
+    } else {
+      d.pendiente = Number(d.pendiente);
+    }
+    if (d.method !== "debe") d.pendiente = 0;
     try { if (typeof d.items === "string") d.items = JSON.parse(d.items); } catch(e) { d.items = []; }
   }
   return d;
@@ -5727,7 +5737,8 @@ function Admin(p) {
     var totalAbonado = abonos.reduce(function (a, ab) {
       return a + ab.monto;
     }, 0);
-    var pendiente = s.pendiente !== undefined ? s.pendiente : s.total - totalAbonado;
+    /* ✅ FIX4: calcular pendiente real usando abonos si pendiente es inválido */
+    var pendiente = (s.pendiente != null && !isNaN(Number(s.pendiente))) ? Math.max(0, Number(s.pendiente)) : Math.max(0, (Number(s.total)||0) - totalAbonado);
     function saveAbono() {
       return _saveAbono.apply(this, arguments);
     }
@@ -7319,9 +7330,10 @@ cajSub==="servicios" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+visSales.reduce(function(a,s){return a+s.total;},0),"Total servicios",C.accent],
      ["$"+visSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
-       var abonos=s.abonos||[];
-       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
-       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
+       var _ab2=s.abonos||[];
+       var _ta=_ab2.reduce(function(a2,ab){return a2+(Number(ab.monto)||0);},0);
+       var _pend=(s.pendiente!=null&&!isNaN(Number(s.pendiente)))?Math.max(0,Number(s.pendiente)):Math.max(0,(Number(s.total)||0)-_ta);
+       return a+_pend;
      },0),"Por cobrar",C.warn],
      [visSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
@@ -7352,9 +7364,10 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+prodSales.reduce(function(a,s){return a+s.total;},0),"Total productos",C.accent],
      ["$"+prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
-       var abonos=s.abonos||[];
-       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
-       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
+       var _ab2=s.abonos||[];
+       var _ta=_ab2.reduce(function(a2,ab){return a2+(Number(ab.monto)||0);},0);
+       var _pend=(s.pendiente!=null&&!isNaN(Number(s.pendiente)))?Math.max(0,Number(s.pendiente)):Math.max(0,(Number(s.total)||0)-_ta);
+       return a+_pend;
      },0),"Por cobrar",C.warn],
      [prodSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
