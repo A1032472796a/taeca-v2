@@ -4343,8 +4343,14 @@ function Admin(p) {
     label: "Config"
   }];
   var allowed = RTABS[user.role] || [];
+  var companyMods = window._companyModules || null;
+  var MOD_MAP = {fidelidad:"sellos",catalogo:"catalogo",caja:"caja",reportes:"reportes"};
   var tabs = allTabs.filter(function (t) {
-    return allowed.indexOf(t.id) >= 0;
+    if(allowed.indexOf(t.id) < 0) return false;
+    if(!companyMods) return true;
+    var modKey = MOD_MAP[t.id] || t.id;
+    if(t.id==="agenda"||t.id==="clientes"||t.id==="config") return true;
+    return companyMods[modKey] === true;
   });
   var tabS = _useState(tabs[0] ? tabs[0].id : "agenda");
   var tab = tabS[0];
@@ -8395,7 +8401,9 @@ function App() {
               co = _context31.v;
               if (co) {
                 window._companyId = co.id;
-                console.log("[Taseca] empresa:", co.company_id, "id:", co.id);
+                window._companyModules = co.modules ? (function(){try{return JSON.parse(co.modules);}catch(e){return null;}})() : null;
+                window._companyTrialEnd = co.trial_end || null;
+                console.log("[Taseca] empresa:", co.company_id, "id:", co.id, "modules:", window._companyModules);
               } else {
                 console.warn("[Taseca] empresa no encontrada:", window._companySlug);
               }
@@ -8580,6 +8588,12 @@ function SuperAdmin(p) {
     var pinS=_useState("0000"),pin=pinS[0],setPin=pinS[1];
     var errS=_useState(""),err=errS[0],setErr=errS[1];
     var loadS=_useState(false),load=loadS[0],setLoad=loadS[1];
+    /* trial: fecha de vencimiento por defecto 14 dias */
+    var trialDaysS=_useState(14),trialDays=trialDaysS[0],setTrialDays=trialDaysS[1];
+    /* modules: objeto {agenda:true, clientes:true, ...} */
+    var modsS=_useState({agenda:true,clientes:true,sellos:false,catalogo:false,caja:false,reportes:false});
+    var mods=modsS[0],setMods=modsS[1];
+    function toggleMod(m){setMods(function(p){var n=Object.assign({},p);n[m]=!n[m];return n;});}
 
     function save(){
       return _asyncToGenerator(function*(){
@@ -8593,7 +8607,14 @@ function SuperAdmin(p) {
           var hashedPin=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
           var coRes=yield fetch(window.SB_URL+"/rest/v1/company",{method:"POST",
             headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
-            body:JSON.stringify({company_name:name.trim(),company_id:slug,active:true,plan:type})});
+            body:JSON.stringify({
+              company_name:name.trim(),
+              company_id:slug,
+              active:true,
+              plan:type,
+              trial_end: (function(){var d=new Date();d.setDate(d.getDate()+trialDays);return d.toISOString().slice(0,10);})(),
+              modules: JSON.stringify(mods)
+            })});
           if(!coRes.ok){var t=yield coRes.text();throw new Error(t);}
           var newCo=(yield coRes.json())[0];
           yield fetch(window.SB_URL+"/rest/v1/users",{method:"POST",
@@ -8640,6 +8661,55 @@ function SuperAdmin(p) {
         ce("div",{style:{marginBottom:10}},
           ce("label",{style:S.lbl},"PIN Admin (4 dígitos)"),
           ce("input",{style:S.inp,placeholder:"0000",value:pin,onChange:function(e){setPin(e.target.value);}})
+        ),
+        ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
+          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
+            ce("b",{style:{fontSize:12,color:C.accent}},"⏳ Período de prueba"),
+            ce("span",{style:{fontSize:11,color:C.muted}},"Días gratis")
+          ),
+          ce("div",{style:{display:"flex",gap:6}},
+            [7,14,30,60].map(function(d){
+              var active=trialDays===d;
+              return ce("button",{type:"button",key:d,
+                onClick:function(){setTrialDays(d);},
+                style:{flex:1,padding:"7px 4px",borderRadius:9,border:"1.5px solid "+(active?C.accent:C.border),
+                  background:active?C.accent+"22":"transparent",color:active?C.accent:C.muted,
+                  fontSize:12,fontWeight:active?700:400,cursor:"pointer"}
+              },d," días");
+            })
+          ),
+          ce("div",{style:{fontSize:10,color:C.muted,marginTop:6}},
+            "Vence: ",(function(){var d=new Date();d.setDate(d.getDate()+trialDays);return d.toLocaleDateString("es-CO");})())
+        ),
+        ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
+          ce("b",{style:{fontSize:12,color:C.accent,display:"block",marginBottom:10}},"🧩 Módulos habilitados"),
+          ce("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
+            [
+              ["agenda","📅 Agenda","Citas y calendario",true],
+              ["clientes","👥 Clientes","Base de clientes",true],
+              ["sellos","🎫 Sellos","Programa de fidelidad",false],
+              ["catalogo","🛒 Catálogo","Productos e inventario",false],
+              ["caja","💰 Caja","Ventas y cobros",false],
+              ["reportes","📊 Reportes","Métricas y dashboards",false]
+            ].map(function(x){
+              var key=x[0],icon=x[1],desc=x[2],required=x[3];
+              var on=mods[key];
+              return ce("div",{key:key,
+                style:{background:on?C.accent+"11":"transparent",border:"1px solid "+(on?C.accent+"44":C.border),
+                  borderRadius:9,padding:"8px 10px",cursor:required?"default":"pointer",opacity:required?0.8:1}
+                ,onClick:function(){if(!required)toggleMod(key);}},
+                ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                  ce("div",null,
+                    ce("div",{style:{fontSize:13}},icon),
+                    ce("div",{style:{fontSize:10,color:on?C.accent:C.muted,fontWeight:700}},key)
+                  ),
+                  ce(Toggle,{val:on,onChange:function(){if(!required)toggleMod(key);}})
+                ),
+                ce("div",{style:{fontSize:9,color:C.muted,marginTop:3}},desc),
+                required&&ce("div",{style:{fontSize:8,color:C.warn}},"🔒 Incluido")
+              );
+            })
+          )
         ),
         err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},"⚠️ ",err),
         ce("div",{style:{display:"flex",gap:10,marginTop:8}},
@@ -8746,11 +8816,28 @@ function SuperAdmin(p) {
               ce("div",null,
                 ce("b",{style:{fontSize:14}},co.company_name),
                 ce("div",{style:{fontSize:11,color:C.cyan,marginTop:1}},"app.taseca.tech?e=",co.company_id),
-                ce("div",{style:{fontSize:10,color:C.muted}},LABELS[co.plan]||co.plan)
+                ce("div",{style:{fontSize:10,color:C.muted}},LABELS[co.plan]||co.plan),
+            (function(){
+              if(!co.trial_end) return null;
+              var daysLeft=Math.ceil((new Date(co.trial_end)-new Date())/864e5);
+              var color=daysLeft<=3?C.err:daysLeft<=7?C.warn:C.ok;
+              if(daysLeft<0) return ce("div",{style:{fontSize:9,color:C.err,fontWeight:700}},"❌ Trial vencido");
+              return ce("div",{style:{fontSize:9,color:color,fontWeight:700}},"⏳ Trial: ",daysLeft," día(s) restante(s)");
+            })()
               )
             ),
             ce("span",{style:{background:(active?C.ok:C.muted)+"22",color:active?C.ok:C.muted,fontSize:11,padding:"2px 8px",borderRadius:20,fontWeight:600}},active?"Activa":"Inactiva")
           ),
+          co.modules&&(function(){
+            var mods={}; try{mods=JSON.parse(co.modules);}catch(e){}
+            var active_mods=Object.keys(mods).filter(function(k){return mods[k];});
+            if(!active_mods.length) return null;
+            return ce("div",{style:{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}},
+              active_mods.map(function(m){
+                return ce("span",{key:m,style:{fontSize:9,background:C.accent+"22",color:C.accent,borderRadius:6,padding:"2px 6px",fontWeight:600}},m);
+              })
+            );
+          })(),
           ce("div",{style:{display:"flex",gap:6,marginTop:10}},
             ce("button",{type:"button",style:{flex:1,background:C.cyan,border:"none",borderRadius:10,padding:"6px",fontSize:11,color:"#000",fontWeight:700,cursor:"pointer"},
               onClick:function(){window.open("https://app.taseca.tech?e="+co.company_id,"_blank");}
