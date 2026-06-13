@@ -266,7 +266,6 @@ function fromDb(c, o) {
     if (d.due_date !== undefined) { d.dueDate = d.due_date; delete d.due_date; }
     if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
     if (d.abonos === undefined) d.abonos = [];
-    /* ✅ FIX fromDb: recalcular pendiente correctamente */
     var _abs = Array.isArray(d.abonos) ? d.abonos : [];
     var _totalAb = _abs.reduce(function(a,x){ return a+(Number(x.monto)||0); }, 0);
     if (d.pendiente === undefined || d.pendiente === null) {
@@ -5731,6 +5730,9 @@ function Admin(p) {
     var noteS = _useState("");
     var note = noteS[0];
     var setNote = noteS[1];
+    var metS = _useState("efectivo");
+    var met = metS[0];
+    var setMet = metS[1];
     var errAS = _useState("");
     var errA = errAS[0];
     var setErrA = errAS[1];
@@ -5768,6 +5770,7 @@ function Admin(p) {
                 id: "ab" + Date.now(),
                 monto: monto,
                 fecha: today(),
+                met: met,
                 nota: note
               };
               newAbonos = abonos.concat([newAbono]);
@@ -5789,23 +5792,12 @@ function Admin(p) {
               }
               _context13.p = 3;
               _context13.n = 4;
-              /* ✅ FIX: usar PATCH directo para garantizar que abonos+pendiente se guarden en Supabase */
               return (function() {
                 var tabla = s._table === "product_sales" ? "product_sales" : "sales";
-                var payload = {
-                  abonos: upd.abonos,
-                  pendiente: Number(upd.pendiente),
-                  method: upd.method,
-                  paid_date: upd.paidDate || null
-                };
+                var payload = { abonos: upd.abonos, pendiente: Number(upd.pendiente), method: upd.method, paid_date: upd.paidDate || null };
                 return fetch(window.SB_URL + "/rest/v1/" + tabla + "?id=eq." + encodeURIComponent(upd.id), {
                   method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "apikey": window.SB_KEY,
-                    "Authorization": "Bearer " + window.SB_KEY,
-                    "Prefer": "return=representation"
-                  },
+                  headers: {"Content-Type":"application/json","apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Prefer":"return=representation"},
                   body: JSON.stringify(payload)
                 });
               })();
@@ -5977,7 +5969,9 @@ function Admin(p) {
           color: C.ok,
           fontWeight: 700
         }
-      }, "+ $", ab.monto), ab.nota && /*#__PURE__*/React.createElement("span", {
+      }, "+ $", ab.monto),
+        ab.met && /*#__PURE__*/React.createElement("span", {style:{fontSize:9,background:C.ok+"22",color:C.ok,borderRadius:8,padding:"1px 6px",marginLeft:5,fontWeight:600}}, ab.met),
+        ab.nota && /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 10,
           color: C.muted,
@@ -6029,11 +6023,24 @@ function Admin(p) {
       onKeyDown: function onKeyDown(e) {
         if (e.key === "Enter") e.preventDefault();
       }
-    }), /*#__PURE__*/React.createElement(Field, {
-      label: "Nota (opcional)",
+    }), /*#__PURE__*/React.createElement("div", {style: {marginBottom: 10}},
+      /*#__PURE__*/React.createElement("label", {style: S.lbl}, "Método de pago"),
+      /*#__PURE__*/React.createElement("div", {style: {display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:5}},
+        [["efectivo","💵 Efectivo",C.ok],["tarjeta","💳 Tarjeta",C.cyan],["transferencia","🏦 Transferencia","#3498db"],["nequi","📱 Nequi","#7b2d8b"]].map(function(x){
+          var active = met === x[0];
+          return /*#__PURE__*/React.createElement("button", {
+            type:"button", key:x[0],
+            onClick: function(){setMet(x[0]);},
+            style:{padding:"8px 4px",borderRadius:9,border:"1.5px solid "+(active?x[2]:C.border),background:active?x[2]+"22":"transparent",color:active?x[2]:C.muted,fontSize:12,fontWeight:active?700:400,cursor:"pointer",textAlign:"center"}
+          }, x[1]);
+        })
+      )
+    ),
+    /*#__PURE__*/React.createElement(Field, {
+      label: "Nota adicional (opcional)",
       val: note,
       set: setNote,
-      ph: "Efectivo, transferencia..."
+      ph: "Observaciones del abono..."
     }), errA && /*#__PURE__*/React.createElement("div", {
       style: {
         background: C.err + "22",
