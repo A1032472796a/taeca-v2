@@ -1541,12 +1541,13 @@ function WeekCal(p) {
           var iw = isWork(su, cur, hr, mn);
           var bl = su.blocks && su.blocks[ts(cur)];
           var ib = bl === true;
+          var isLunch = !!(su.lunchStart && su.lunchEnd && (hr*60+mn) >= pt(su.lunchStart) && (hr*60+mn) < pt(su.lunchEnd));
           var isToday = ts(cur) === today();
           var slotAppts = getStaffAppts(su.id, ts(cur), hr, mn);
           return /*#__PURE__*/React.createElement("div", {
             key: su.id,
             onClick: function onClick() {
-              if (slotAppts.length > 0) onAppt(slotAppts[0]);else if (iw && !ib) onSlot(cur, hr, mn, su.id);
+              if (slotAppts.length > 0) onAppt(slotAppts[0]);else if (iw && !ib && !isLunch) onSlot(cur, hr, mn, su.id);
             },
             style: {
               flex: 1,
@@ -1616,7 +1617,7 @@ function WeekCal(p) {
             style: {
               position: "absolute",
               inset: 0,
-              background: "repeating-linear-gradient(45deg," + C.err + "11," + C.err + "11 3px,transparent 3px,transparent 7px)"
+              background: isLunch ? "repeating-linear-gradient(45deg,#f39c1233,#f39c1233 3px,transparent 3px,transparent 7px)" : "repeating-linear-gradient(45deg," + C.err + "11," + C.err + "11 3px,transparent 3px,transparent 7px)"
             }
           }), iw && !ib && slotAppts.length === 0 && /*#__PURE__*/React.createElement("div", {
             style: {
@@ -1822,6 +1823,12 @@ function SchedMdl(p) {
   var wes = _useState(u.wEnd || "19:00");
   var we = wes[0];
   var setWe = wes[1];
+  var lsS = _useState(u.lunchStart || "");
+  var lunchStart = lsS[0];
+  var setLunchStart = lsS[1];
+  var leS = _useState(u.lunchEnd || "");
+  var lunchEnd = leS[0];
+  var setLunchEnd = leS[1];
   var yrs = _useState(new Date().getFullYear());
   var yr = yrs[0];
   var setYr = yrs[1];
@@ -1864,6 +1871,8 @@ function SchedMdl(p) {
       workDays: wd,
       wStart: ws,
       wEnd: we,
+      lunchStart: lunchStart || null,
+      lunchEnd: lunchEnd || null,
       blocks: bl
     });
     p.onSave(upd);
@@ -1978,7 +1987,36 @@ function SchedMdl(p) {
       marginBottom: 13,
       padding: "9px"
     })
-  }, "Aplicar patron a todo ", MO[mo]), /*#__PURE__*/React.createElement("label", {
+  }, "Aplicar patron a todo ", MO[mo]),
+  /*#__PURE__*/React.createElement("div", {style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:13,border:"1px solid "+C.border}},
+    /*#__PURE__*/React.createElement("label", {style:Object.assign({},S.lbl,{fontWeight:700,marginBottom:8,display:"block"})}, "🍽 HORA DE ALMUERZO (opcional)"),
+    /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:10,marginBottom:8}},
+      /*#__PURE__*/React.createElement("div", {style:{flex:1}},
+        /*#__PURE__*/React.createElement("label", {style:S.lbl}, "Inicio"),
+        /*#__PURE__*/React.createElement("select", {
+          style:S.inp, value:lunchStart||"",
+          onChange:function(e){setLunchStart(e.target.value);}
+        },
+          /*#__PURE__*/React.createElement("option",{value:""},"Sin almuerzo"),
+          SLOTS.map(function(s){return /*#__PURE__*/React.createElement("option",{key:s,value:s},s);})
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", {style:{flex:1}},
+        /*#__PURE__*/React.createElement("label", {style:S.lbl}, "Fin"),
+        /*#__PURE__*/React.createElement("select", {
+          style:S.inp, value:lunchEnd||"",
+          onChange:function(e){setLunchEnd(e.target.value);}
+        },
+          /*#__PURE__*/React.createElement("option",{value:""},"--"),
+          SLOTS.map(function(s){return /*#__PURE__*/React.createElement("option",{key:s,value:s},s);})
+        )
+      )
+    ),
+    lunchStart && lunchEnd && /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:C.warn,textAlign:"center"}},
+      "⏸️ Bloqueado de ", lunchStart, " a ", lunchEnd, " — no se podrán agendar citas"
+    ),
+    lunchStart && !lunchEnd && /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:C.err}},"⚠️ Selecciona la hora de fin")
+  ), /*#__PURE__*/React.createElement("label", {
     style: _objectSpread(_objectSpread({}, S.lbl), {}, {
       fontWeight: 700
     })
@@ -4419,6 +4457,9 @@ function Admin(p) {
   var abonoMdlS = _useState(null);
   var abonoMdl = abonoMdlS[0];
   var setAbonoMdl = abonoMdlS[1];
+  var prodSearchS = _useState("");
+  var prodSearch = prodSearchS[0];
+  var setProdSearch = prodSearchS[1];
   var staffL = users.filter(function (u) {
     return u.role === "barbero" || u.role === "tatuador";
   });
@@ -7360,9 +7401,28 @@ function Admin(p) {
         }, _callee21);
       }))
     }, "Eliminar")));
-  })), sub === "productos" && /*#__PURE__*/React.createElement("div", {
-    className: "desktop-2col"
-  }, prods.map(function (pr) {
+  })), sub === "productos" && /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", {style:{position:"relative",marginBottom:12}},
+      /*#__PURE__*/React.createElement("input", {
+        style:Object.assign({},S.inp,{paddingLeft:34}),
+        placeholder:"🔍 Buscar producto...",
+        value: prodSearch||"",
+        onChange:function(e){setProdSearch(e.target.value);},
+        onKeyDown:function(e){if(e.key==="Escape")setProdSearch("");}
+      }),
+      prodSearch && /*#__PURE__*/React.createElement("button",{
+        type:"button",
+        onClick:function(){setProdSearch("");},
+        style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}
+      },"×")
+    ),
+    /*#__PURE__*/React.createElement("div", {
+      className: "desktop-2col"
+    }, (prods.filter(function(pr){
+        if(!prodSearch) return true;
+        var q=prodSearch.toLowerCase();
+        return pr.name.toLowerCase().indexOf(q)>=0;
+      })).map(function (pr) {
     return /*#__PURE__*/React.createElement("div", {
       key: pr.id,
       style: S.card
@@ -7426,7 +7486,7 @@ function Admin(p) {
         }, _callee22);
       }))
     }, "Eliminar")));
-  })), !isAdmin && /*#__PURE__*/React.createElement("div", {
+  }))), !isAdmin && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#1a2230",
       borderRadius: 10,
