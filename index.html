@@ -218,7 +218,6 @@ function toDb(c, o) {
     if (d.dueDate !== undefined) { d.due_date = d.dueDate; delete d.dueDate; }
     if (d.paidDate !== undefined) { d.paid_date = d.paidDate; delete d.paidDate; }
     if (d.abonos !== undefined) { d.abonos = Array.isArray(d.abonos) ? d.abonos : []; }
-    /* ✅ FIX1: persistir pendiente como número */
     if (d.pendiente !== undefined && d.pendiente !== null) { d.pendiente = Number(d.pendiente); }
   }
   return d;
@@ -267,11 +266,11 @@ function fromDb(c, o) {
     if (d.due_date !== undefined) { d.dueDate = d.due_date; delete d.due_date; }
     if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
     if (d.abonos === undefined) d.abonos = [];
-    /* ✅ FIX2: recalcular pendiente correctamente al cargar desde DB */
+    /* ✅ FIX fromDb: recalcular pendiente correctamente */
     var _abs = Array.isArray(d.abonos) ? d.abonos : [];
-    var _totalAbonado = _abs.reduce(function(a, x){ return a + (Number(x.monto)||0); }, 0);
+    var _totalAb = _abs.reduce(function(a,x){ return a+(Number(x.monto)||0); }, 0);
     if (d.pendiente === undefined || d.pendiente === null) {
-      d.pendiente = Math.max(0, (Number(d.total)||0) - _totalAbonado);
+      d.pendiente = Math.max(0, (Number(d.total)||0) - _totalAb);
     } else {
       d.pendiente = Number(d.pendiente);
     }
@@ -5107,7 +5106,9 @@ function Admin(p) {
                 total: total,
                 method: mt === "debe" ? "debe" : mt,
                 dueDate: mt === "debe" ? dp : null,
-                date: today()
+                date: today(),
+                abonos: [],
+                pendiente: mt === "debe" ? total : 0
               };
               setProdSales(function (x) {
                 return x.concat([item]);
@@ -5737,8 +5738,7 @@ function Admin(p) {
     var totalAbonado = abonos.reduce(function (a, ab) {
       return a + ab.monto;
     }, 0);
-    /* ✅ FIX4: calcular pendiente real usando abonos si pendiente es inválido */
-    var pendiente = (s.pendiente != null && !isNaN(Number(s.pendiente))) ? Math.max(0, Number(s.pendiente)) : Math.max(0, (Number(s.total)||0) - totalAbonado);
+    var pendiente = s.pendiente !== undefined ? s.pendiente : s.total - totalAbonado;
     function saveAbono() {
       return _saveAbono.apply(this, arguments);
     }
@@ -5789,7 +5789,26 @@ function Admin(p) {
               }
               _context13.p = 3;
               _context13.n = 4;
-              return DB.save(s._table === "product_sales" ? "product_sales" : "sales", upd.id, upd);
+              /* ✅ FIX: usar PATCH directo para garantizar que abonos+pendiente se guarden en Supabase */
+              return (function() {
+                var tabla = s._table === "product_sales" ? "product_sales" : "sales";
+                var payload = {
+                  abonos: upd.abonos,
+                  pendiente: Number(upd.pendiente),
+                  method: upd.method,
+                  paid_date: upd.paidDate || null
+                };
+                return fetch(window.SB_URL + "/rest/v1/" + tabla + "?id=eq." + encodeURIComponent(upd.id), {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "apikey": window.SB_KEY,
+                    "Authorization": "Bearer " + window.SB_KEY,
+                    "Prefer": "return=representation"
+                  },
+                  body: JSON.stringify(payload)
+                });
+              })();
             case 4:
               _context13.n = 6;
               break;
@@ -7330,10 +7349,9 @@ cajSub==="servicios" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+visSales.reduce(function(a,s){return a+s.total;},0),"Total servicios",C.accent],
      ["$"+visSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
-       var _ab2=s.abonos||[];
-       var _ta=_ab2.reduce(function(a2,ab){return a2+(Number(ab.monto)||0);},0);
-       var _pend=(s.pendiente!=null&&!isNaN(Number(s.pendiente)))?Math.max(0,Number(s.pendiente)):Math.max(0,(Number(s.total)||0)-_ta);
-       return a+_pend;
+       var abonos=s.abonos||[];
+       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
+       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
      },0),"Por cobrar",C.warn],
      [visSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
@@ -7364,10 +7382,9 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
     [["$"+prodSales.reduce(function(a,s){return a+s.total;},0),"Total productos",C.accent],
      ["$"+prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
-       var _ab2=s.abonos||[];
-       var _ta=_ab2.reduce(function(a2,ab){return a2+(Number(ab.monto)||0);},0);
-       var _pend=(s.pendiente!=null&&!isNaN(Number(s.pendiente)))?Math.max(0,Number(s.pendiente)):Math.max(0,(Number(s.total)||0)-_ta);
-       return a+_pend;
+       var abonos=s.abonos||[];
+       var totalAbonado=abonos.reduce(function(a2,ab){return a2+ab.monto;},0);
+       return a+(s.pendiente!==undefined?s.pendiente:s.total-totalAbonado);
      },0),"Por cobrar",C.warn],
      [prodSales.filter(function(s){return s.method==="debe";}).length,"Deudas",C.err]
     ].map(function(x){return /*#__PURE__*/React.createElement("div",{key:x[1],style:{background:x[2]+"18",border:"1px solid "+x[2]+"33",borderRadius:11,padding:"10px 8px",textAlign:"center"}},
