@@ -2142,13 +2142,18 @@ function Reportes(p) {
     sales = p.sales,
     clients = p.clients,
     users = p.users,
-    isAdmin = p.isAdmin;
+    isAdmin = p.isAdmin,
+    prodSales = p.prodSales || [],
+    prods = p.prods || [];
   var ps = _useState("month");
   var period = ps[0];
   var setPeriod = ps[1];
   var ss = _useState("all");
   var stf = ss[0];
   var setStf = ss[1];
+  var rts = _useState("servicios");
+  var rtab = rts[0];
+  var setRtab = rts[1];
   var now = new Date(),
     tm = now.toISOString().slice(0, 7),
     lm = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7),
@@ -2232,7 +2237,20 @@ function Reportes(p) {
       fontSize: 15,
       color: C.accent
     }
-  }, "\uD83D\uDCCA Reportes"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCA Reportes"),
+  /* Sub-tabs */
+  /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8,margin:"12px 0 14px"}},
+    [["servicios","\u2702\uFE0F Servicios"],["productos","\uD83D\uDCE6 Productos"]].map(function(x){
+      var active = rtab === x[0];
+      return /*#__PURE__*/React.createElement("button",{
+        type:"button", key:x[0],
+        onClick:function(){setRtab(x[0]);},
+        style:Object.assign({},S.btn(active?"gold":"ghost"),{flex:1,fontSize:13,padding:"10px",color:active?"#000":C.muted})
+      },x[1]);
+    })
+  ),
+  rtab === "servicios" && /*#__PURE__*/React.createElement("div", null,
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 4,
@@ -2601,7 +2619,95 @@ function Reportes(p) {
         color: C.muted
       }
     }, x[1]));
-  }))));
+  }))
+  ),
+  rtab === "productos" && /*#__PURE__*/React.createElement("div", null,
+    (function(){
+      var ce = React.createElement;
+      var ingProd = prodSales.reduce(function(a,s){return a+s.total;},0);
+      var porCob = prodSales.filter(function(s){return s.method==="debe";}).reduce(function(a,s){
+        var ab=s.abonos||[]; var tot=ab.reduce(function(a2,x){return a2+(Number(x.monto)||0);},0);
+        return a+((s.pendiente!=null&&!isNaN(Number(s.pendiente)))?Math.max(0,Number(s.pendiente)):Math.max(0,s.total-tot));
+      },0);
+      var deudas = prodSales.filter(function(s){return s.method==="debe"&&(s.pendiente||0)>0;}).length;
+      var pc = {};
+      prodSales.forEach(function(s){
+        (s.items||[]).forEach(function(it){
+          var name=it.replace(/ x\d+$/,"").trim();
+          var m=it.match(/ x(\d+)$/);
+          pc[name]=(pc[name]||0)+(m?parseInt(m[1]):1);
+        });
+      });
+      var topProds = Object.entries(pc).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+      var pm = {}; prodSales.forEach(function(s){pm[s.method]=(pm[s.method]||0)+s.total;});
+      var stockBajo = prods.filter(function(p){return(p.stock||0)>0&&(p.stock||0)<5;}).length;
+      var agotados = prods.filter(function(p){return(p.stock||0)===0;}).length;
+      return ce("div",null,
+        ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}},
+          [["📦","Ventas prod.","$"+ingProd,C.accent],["🔢","Transacciones",prodSales.length,C.cyan],["⏳","Por cobrar","$"+porCob,C.warn],["🚨","Deudas activas",deudas,C.err]].map(function(x){
+            return ce("div",{key:x[1],style:{background:x[3]+"18",border:"1px solid "+x[3]+"33",borderRadius:11,padding:"11px",textAlign:"center"}},
+              ce("div",{style:{fontSize:20}},x[0]),
+              ce("div",{style:{fontSize:18,fontWeight:900,color:x[3],marginTop:3}},x[2]),
+              ce("div",{style:{fontSize:10,color:C.muted}},x[1])
+            );
+          })
+        ),
+        ce("div",{style:Object.assign({},S.card,{marginBottom:10})},
+          ce("b",{style:{fontSize:12}},"📦 Productos más vendidos"),
+          ce("div",{style:{marginTop:9}},
+            topProds.length===0
+              ? ce("div",{style:{color:C.muted,fontSize:12,textAlign:"center",padding:10}},"Sin ventas de productos")
+              : topProds.map(function(x,i){
+                  var pct=Math.round(x[1]/Math.max(topProds[0][1],1)*100);
+                  var medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"  ";
+                  return ce("div",{key:x[0],style:{marginBottom:7}},
+                    ce("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},
+                      ce("span",{style:{fontSize:11}},medal+" "+x[0]),
+                      ce("b",{style:{fontSize:11,color:C.accent}},"x"+x[1])
+                    ),
+                    ce("div",{style:{background:C.border,borderRadius:20,height:5}},
+                      ce("div",{style:{width:pct+"%",height:"100%",background:"linear-gradient(90deg,"+C.accent+","+C.cyan+")",borderRadius:20}})
+                    )
+                  );
+                })
+          )
+        ),
+        ce("div",{style:Object.assign({},S.card,{marginBottom:10})},
+          ce("b",{style:{fontSize:12}},"🟢 Stock actual"),
+          ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginTop:9,marginBottom:10}},
+            [[prods.length,"Total",C.text],[stockBajo,"Stock bajo",C.warn],[agotados,"Agotados",C.err]].map(function(x){
+              return ce("div",{key:x[1],style:{textAlign:"center",background:x[2]+"11",border:"1px solid "+x[2]+"33",borderRadius:9,padding:"8px 4px"}},
+                ce("div",{style:{fontSize:18,fontWeight:900,color:x[2]}},x[0]),
+                ce("div",{style:{fontSize:9,color:C.muted}},x[1])
+              );
+            })
+          ),
+          prods.slice().sort(function(a,b){return(a.stock||0)-(b.stock||0);}).slice(0,8).map(function(pr){
+            var s=pr.stock||0, col=s===0?C.err:s<5?C.warn:C.ok;
+            return ce("div",{key:pr.id,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+C.border}},
+              ce("span",{style:{fontSize:12}},pr.name),
+              ce("b",{style:{fontSize:13,color:col}},s)
+            );
+          })
+        ),
+        ce("div",{style:S.card},
+          ce("b",{style:{fontSize:12}},"💳 Métodos de pago — Productos"),
+          ce("div",{style:{marginTop:8}},
+            Object.entries(pm).length===0
+              ? ce("div",{style:{color:C.muted,fontSize:12,textAlign:"center",padding:10}},"Sin ventas")
+              : Object.entries(pm).map(function(x){
+                  var lbl=x[0]==="efectivo"?"💵 Efectivo":x[0]==="tarjeta"?"💳 Tarjeta":x[0]==="transferencia"?"🏦 Transferencia":x[0]==="debe"?"⏳ Debe":x[0];
+                  return ce("div",{key:x[0],style:{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid "+C.border}},
+                    ce("span",{style:{fontSize:12}},lbl),
+                    ce("b",{style:{color:C.accent}},"$"+x[1])
+                  );
+                })
+          )
+        )
+      );
+    })()
+  )
+));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -7471,7 +7577,9 @@ cajSub==="productos" && /*#__PURE__*/React.createElement("div", null,
     sales: visSales,
     clients: visClients,
     users: users,
-    isAdmin: isAdmin
+    isAdmin: isAdmin,
+    prodSales: prodSales,
+    prods: prods
   }), tab === "config" && isAdmin && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", {
     style: {
       fontSize: 15,
