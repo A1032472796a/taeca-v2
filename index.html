@@ -5057,6 +5057,9 @@ function Admin(p) {
 
   /* ─── Sale Modal ─── */
   function SaleMdl() {
+    var rapidS = _useState(false);
+    var rapid = rapidS[0];
+    var setRapid = rapidS[1];
     var clS = _useState("");
     var cl = clS[0];
     var setCl = clS[1];
@@ -5171,7 +5174,7 @@ function Admin(p) {
           while (1) switch (_context11.p = _context11.n) {
             case 0:
               setErr("");
-              if (cl.trim()) {
+              if (rapid || cl.trim()) {
                 _context11.n = 1;
                 break;
               }
@@ -5194,7 +5197,7 @@ function Admin(p) {
             case 3:
               item = {
                 id: "v" + Date.now(),
-                client: cl.trim(),
+                client: rapid ? "Cliente rápido" : cl.trim(),
                 phone: ph,
                 items: selProds.map(function (x) {
                   return x.qty > 1 ? x.name + " x" + x.qty : x.name;
@@ -5267,7 +5270,20 @@ function Admin(p) {
         fontSize: 22,
         cursor: "pointer"
       }
-    }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    }, "\u2715")),
+      /*#__PURE__*/React.createElement("div", {
+        style:{background:rapid?"#c9a84c11":"#1a2230",border:"1px solid "+(rapid?C.accent:C.border),
+          borderRadius:11,padding:"10px 13px",marginBottom:10,
+          display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},
+        onClick:function(){setRapid(function(v){return !v;});}
+      },
+        /*#__PURE__*/React.createElement("div",null,
+          /*#__PURE__*/React.createElement("b",{style:{fontSize:13,color:rapid?C.accent:C.text}},"⚡ Venta rápida"),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:2}},"Sin registrar cliente — solo productos y cobro")
+        ),
+        /*#__PURE__*/React.createElement(Toggle,{val:rapid,onChange:function(){setRapid(function(v){return !v;});}})
+      ),
+      !rapid && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 10
       }
@@ -5346,7 +5362,7 @@ function Admin(p) {
         fontSize: 11,
         color: C.warn
       }
-    }, "\uD83D\uDCCB N\xFAmero nuevo \u2014 ingresa el nombre manualmente"), /*#__PURE__*/React.createElement(Field, {
+    }, "\uD83D\uDCCB N\xFAmero nuevo \u2014 ingresa el nombre manualmente"), !rapid && /*#__PURE__*/React.createElement(Field, {
       label: "Nombre del cliente",
       val: cl,
       set: setCl,
