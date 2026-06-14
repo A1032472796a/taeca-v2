@@ -1999,35 +1999,33 @@ function SchedMdl(p) {
       padding: "9px"
     })
   }, "Aplicar patron a todo ", MO[mo]),
-  /*#__PURE__*/React.createElement("div", {style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:13,border:"1px solid "+C.border}},
-    /*#__PURE__*/React.createElement("label", {style:Object.assign({},S.lbl,{fontWeight:700,marginBottom:8,display:"block"})}, "🍽 HORA DE ALMUERZO (opcional)"),
-    /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:10,marginBottom:8}},
-      /*#__PURE__*/React.createElement("div", {style:{flex:1}},
-        /*#__PURE__*/React.createElement("label", {style:S.lbl}, "Inicio"),
-        /*#__PURE__*/React.createElement("select", {
-          style:S.inp, value:lunchStart||"",
-          onChange:function(e){setLunchStart(e.target.value);}
-        },
-          /*#__PURE__*/React.createElement("option",{value:""},"Sin almuerzo"),
-          SLOTS.map(function(s){return /*#__PURE__*/React.createElement("option",{key:s,value:s},s);})
+  (function(){
+    var ce2=React.createElement;
+    return ce2("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:13,border:"1px solid "+C.border}},
+      ce2("label",{style:Object.assign({},S.lbl,{fontWeight:700,marginBottom:8,display:"block"})},"🍽 HORA DE ALMUERZO (opcional)"),
+      ce2("div",{style:{display:"flex",gap:10,marginBottom:8}},
+        ce2("div",{style:{flex:1}},
+          ce2("label",{style:S.lbl},"Inicio"),
+          ce2("select",{style:S.inp,value:lunchStart||"",onChange:function(e){setLunchStart(e.target.value);}},
+            ce2("option",{value:""},"Sin almuerzo"),
+            SLOTS.map(function(s){return ce2("option",{key:s,value:s},s);})
+          )
+        ),
+        ce2("div",{style:{flex:1}},
+          ce2("label",{style:S.lbl},"Fin"),
+          ce2("select",{style:S.inp,value:lunchEnd||"",onChange:function(e){setLunchEnd(e.target.value);}},
+            ce2("option",{value:""},"--"),
+            SLOTS.map(function(s){return ce2("option",{key:s,value:s},s);})
+          )
         )
       ),
-      /*#__PURE__*/React.createElement("div", {style:{flex:1}},
-        /*#__PURE__*/React.createElement("label", {style:S.lbl}, "Fin"),
-        /*#__PURE__*/React.createElement("select", {
-          style:S.inp, value:lunchEnd||"",
-          onChange:function(e){setLunchEnd(e.target.value);}
-        },
-          /*#__PURE__*/React.createElement("option",{value:""},"--"),
-          SLOTS.map(function(s){return /*#__PURE__*/React.createElement("option",{key:s,value:s},s);})
-        )
-      )
-    ),
-    lunchStart && lunchEnd && /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:C.warn,textAlign:"center"}},
-      "⏸️ Bloqueado de ", lunchStart, " a ", lunchEnd, " — no se podrán agendar citas"
-    ),
-    lunchStart && !lunchEnd && /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:C.err}},"⚠️ Selecciona la hora de fin")
-  ), /*#__PURE__*/React.createElement("label", {
+      lunchStart&&lunchEnd&&ce2("div",{style:{fontSize:11,color:C.warn,textAlign:"center"}},
+        "⏸️ Bloqueado de ",lunchStart," a ",lunchEnd," — no se podrán agendar citas"
+      ),
+      lunchStart&&!lunchEnd&&ce2("div",{style:{fontSize:11,color:C.err}},"⚠️ Selecciona la hora de fin")
+    );
+  })(),
+  /*#__PURE__*/React.createElement("label", {
     style: _objectSpread(_objectSpread({}, S.lbl), {}, {
       fontWeight: 700
     })
