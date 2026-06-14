@@ -8740,29 +8740,18 @@ function SuperAdmin(p) {
         ce("button",{type:"button",style:{background:C.border,border:"none",borderRadius:9,padding:"5px 12px",color:C.muted,fontSize:11,cursor:"pointer"},onClick:p.onLogout},"← Salir")
       )
     ),
-    /* alertas de pago */
     (function(){
-      var vencidas=companies.filter(function(c){return c.payment_due&&Math.ceil((new Date(c.payment_due)-new Date())/864e5)<=0;});
-      var proximas=companies.filter(function(c){
-        if(!c.payment_due) return false;
-        var d=Math.ceil((new Date(c.payment_due)-new Date())/864e5);
-        return d>0&&d<=7;
-      });
-      if(!vencidas.length&&!proximas.length) return null;
-      return ce("div",{style:{padding:"0 16px 8px"}},
-        vencidas.length>0&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",gap:10,alignItems:"center"}},
-          ce("span",{style:{fontSize:18}},"🚨"),
-          ce("div",null,
-            ce("b",{style:{color:C.err,fontSize:13}},vencidas.length," pago(s) VENCIDO(S)"),
-            ce("div",{style:{fontSize:11,color:C.muted}},vencidas.map(function(c){return c.company_name;}).join(", "))
-          )
+      var venc=companies.filter(function(c){return c.payment_due&&Math.ceil((new Date(c.payment_due)-new Date())/864e5)<=0;});
+      var prox=companies.filter(function(c){var d=c.payment_due&&Math.ceil((new Date(c.payment_due)-new Date())/864e5);return d>0&&d<=7;});
+      if(!venc.length&&!prox.length)return null;
+      return ce("div",{style:{padding:"0 16px 10px"}},
+        venc.length>0&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",gap:8,alignItems:"center"}},
+          ce("span",{style:{fontSize:20}},"🚨"),
+          ce("div",null,ce("b",{style:{color:C.err,fontSize:13}},venc.length," pago(s) VENCIDO(S)"),ce("div",{style:{fontSize:11,color:C.muted}},venc.map(function(c){return c.company_name;}).join(", ")))
         ),
-        proximas.length>0&&ce("div",{style:{background:C.warn+"22",border:"1px solid "+C.warn+"55",borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}},
-          ce("span",{style:{fontSize:18}},"⚠️"),
-          ce("div",null,
-            ce("b",{style:{color:C.warn,fontSize:13}},proximas.length," pago(s) próximo(s) en ≤7 días"),
-            ce("div",{style:{fontSize:11,color:C.muted}},proximas.map(function(c){return c.company_name+" ("+c.payment_due+")";}).join(", "))
-          )
+        prox.length>0&&ce("div",{style:{background:C.warn+"22",border:"1px solid "+C.warn+"55",borderRadius:10,padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}},
+          ce("span",{style:{fontSize:20}},"⚠️"),
+          ce("div",null,ce("b",{style:{color:C.warn,fontSize:13}},prox.length," pago(s) próximo(s) ≤7d"),ce("div",{style:{fontSize:11,color:C.muted}},prox.map(function(c){return c.company_name+" ("+c.payment_due+")";}).join(", ")))
         )
       );
     })(),
@@ -8867,18 +8856,25 @@ function SuperAdmin(p) {
           })(),
           (function(){
             if(!co.payment_due) return null;
-            var daysLeft=Math.ceil((new Date(co.payment_due)-new Date())/864e5);
-            var color=daysLeft<=0?C.err:daysLeft<=5?C.err:daysLeft<=15?C.warn:C.ok;
-            var msg=daysLeft<=0?"❌ PAGO VENCIDO hace "+Math.abs(daysLeft)+" día(s)":"💳 Pago: "+daysLeft+" día(s) ("+co.payment_due+")";
-            return ce("div",{style:{background:color+"22",border:"1px solid "+color+"55",borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:10,color:color,fontWeight:700}},msg);
+            var dLeft=Math.ceil((new Date(co.payment_due)-new Date())/864e5);
+            var col=dLeft<=0?C.err:dLeft<=7?C.warn:C.ok;
+            return ce("div",{style:{background:col+"22",border:"1px solid "+col+"55",borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:10,color:col,fontWeight:700}},
+              dLeft<=0?"❌ PAGO VENCIDO hace "+Math.abs(dLeft)+"d":"💳 Pago vence en "+dLeft+"d — "+co.payment_due);
           })(),
-          ce("div",{style:{display:"flex",gap:6,marginTop:10}},
-            ce("button",{type:"button",style:{flex:2,background:C.cyan,border:"none",borderRadius:10,padding:"6px",fontSize:11,color:"#000",fontWeight:700,cursor:"pointer"},
+          co.modules&&(function(){
+            var mm={};try{mm=JSON.parse(co.modules);}catch(e){}
+            var ak=Object.keys(mm).filter(function(k){return mm[k];});
+            if(!ak.length)return null;
+            return ce("div",{style:{display:"flex",gap:4,flexWrap:"wrap",margin:"5px 0 8px"}},
+              ak.map(function(m){return ce("span",{key:m,style:{fontSize:9,background:C.accent+"22",color:C.accent,borderRadius:6,padding:"2px 6px",fontWeight:600}},m);}));
+          })(),
+          ce("div",{style:{display:"flex",gap:6,marginTop:6}},
+            ce("button",{type:"button",style:{flex:2,background:C.cyan,border:"none",borderRadius:10,padding:"7px",fontSize:11,color:"#000",fontWeight:700,cursor:"pointer"},
               onClick:function(){window.open("https://app.taseca.tech?e="+co.company_id,"_blank");}
             },"🚀 Abrir"),
-            ce("button",{type:"button",style:{flex:1,background:C.accent+"22",border:"1px solid "+C.accent+"44",borderRadius:10,padding:"6px",fontSize:11,color:C.accent,fontWeight:700,cursor:"pointer"},
-              onClick:function(e){e.stopPropagation();setEditCo(co);}
-            },"✏️ Editar"),
+            ce("button",{type:"button",style:{flex:1,background:C.accent+"22",border:"1px solid "+C.accent+"44",borderRadius:10,padding:"7px",fontSize:11,color:C.accent,fontWeight:700,cursor:"pointer"},
+              onClick:function(e){e.stopPropagation();setEditCo(Object.assign({},co));}
+            },"✏️"),
             ce("button",{type:"button",style:{flex:1,background:"transparent",border:"1px solid "+C.border,borderRadius:10,padding:"6px",fontSize:11,color:C.muted,cursor:"pointer"},
               onClick:function(){
                 fetch(window.SB_URL+"/rest/v1/company?id=eq."+co.id,{method:"PATCH",
@@ -8892,50 +8888,53 @@ function SuperAdmin(p) {
       })
     ),
     mdl&&ce(NewCompanyMdl,null),
-    editCo&&ce(EditCompanyMdl,{co:editCo,onClose:function(){setEditCo(null);},onSave:function(updated){
-      setCompanies(function(x){return x.map(function(c){return c.id===updated.id?updated:c;});});
-      setEditCo(null);
-    }})
+    editCo&&ce(EditCompanyMdl,{co:editCo,
+      onClose:function(){setEditCo(null);},
+      onSave:function(upd){
+        setCompanies(function(x){return x.map(function(c){return c.id===upd.id?upd:c;});});
+        setEditCo(null);
+      }
+    })
   );
 }
 
-function EditCompanyMdl(p) {
+function EditCompanyMdl(p){
   var co=p.co;
   var nameS=_useState(co.company_name||""),name=nameS[0],setName=nameS[1];
   var typeS=_useState(co.plan||"barberia"),type=typeS[0],setType=typeS[1];
-  var trialS=_useState(co.trial_end||""),trialEnd=trialS[0],setTrialEnd=trialS[1];
-  var payS=_useState(co.payment_due||""),payDue=payS[0],setPayDue=payS[1];
-  var modsS=_useState((function(){try{return JSON.parse(co.modules||"{}");}catch(e){return {};}})());
-  var mods=modsS[0],setMods=modsS[1];
+  var trialS=_useState(co.trial_end||""),trial=trialS[0],setTrial=trialS[1];
+  var payS=_useState(co.payment_due||""),pay=payS[0],setPay=payS[1];
+  var initMods=(function(){try{return JSON.parse(co.modules||"{}");}catch(e){return {};}})();
+  var modsS=_useState(initMods),mods=modsS[0],setMods=modsS[1];
   var errS=_useState(""),err=errS[0],setErr=errS[1];
   var loadS=_useState(false),load=loadS[0],setLoad=loadS[1];
   function toggleMod(m){setMods(function(prev){var n=Object.assign({},prev);n[m]=!n[m];return n;});}
+  function addDays(d){var dt=new Date();dt.setDate(dt.getDate()+d);return dt.toISOString().slice(0,10);}
   function save(){
-    setLoad(true);
-    var payload={
-      company_name:name.trim(),
-      plan:type,
-      trial_end:trialEnd||null,
-      payment_due:payDue||null,
-      modules:JSON.stringify(mods)
-    };
+    if(!name.trim()){setErr("Nombre obligatorio");return;}
+    setLoad(true);setErr("");
+    var payload={company_name:name.trim(),plan:type,trial_end:trial||null,payment_due:pay||null,modules:JSON.stringify(mods)};
     fetch(window.SB_URL+"/rest/v1/company?id=eq."+co.id,{
       method:"PATCH",
       headers:{"apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},
       body:JSON.stringify(payload)
-    }).then(function(r){return r.json();})
-      .then(function(d){p.onSave(Object.assign({},co,payload));setLoad(false);})
-      .catch(function(e){setErr(e.message);setLoad(false);});
+    }).then(function(r){
+      if(!r.ok){return r.text().then(function(t){throw new Error(t);});}
+      return r.json();
+    }).then(function(){
+      p.onSave(Object.assign({},co,payload));
+      setLoad(false);
+    }).catch(function(e){setErr(e.message);setLoad(false);});
   }
   var ce=React.createElement;
   return ce("div",{style:Object.assign({},S.ov,{zIndex:400}),onClick:p.onClose},
-    ce("div",{style:S.mb,onClick:function(e){e.stopPropagation();}},
+    ce("div",{style:Object.assign({},S.mb,{maxHeight:"90vh"}),onClick:function(e){e.stopPropagation();}},
       ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
-        ce("b",{style:{fontSize:15,color:C.accent}},"✏️ Editar empresa"),
+        ce("b",{style:{fontSize:15,color:C.accent}},"✏️ Editar empresa: ",co.company_name),
         ce("button",{type:"button",onClick:p.onClose,style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}},"×")
       ),
       ce("div",{style:{marginBottom:10}},
-        ce("label",{style:S.lbl},"Nombre del negocio"),
+        ce("label",{style:S.lbl},"Nombre"),
         ce("input",{style:S.inp,value:name,onChange:function(e){setName(e.target.value);}})
       ),
       ce("div",{style:{marginBottom:10}},
@@ -8945,56 +8944,46 @@ function EditCompanyMdl(p) {
         )
       ),
       ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("label",{style:Object.assign({},S.lbl,{fontWeight:700,marginBottom:6,display:"block"})},"⏳ Vencimiento trial"),
-        ce("input",{style:S.inp,type:"date",value:trialEnd,onChange:function(e){setTrialEnd(e.target.value);}}),
-        trialEnd&&(function(){
-          var d=Math.ceil((new Date(trialEnd)-new Date())/864e5);
-          return ce("div",{style:{fontSize:10,color:d<=0?C.err:d<=7?C.warn:C.ok,marginTop:4,fontWeight:700}},
-            d<=0?"❌ Vencido hace "+Math.abs(d)+" día(s)":"✅ Quedan "+d+" día(s)");
-        })()
-      ),
-      ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("label",{style:Object.assign({},S.lbl,{fontWeight:700,marginBottom:6,display:"block"})},"💳 Fecha de pago"),
-        ce("input",{style:S.inp,type:"date",value:payDue,onChange:function(e){setPayDue(e.target.value);}}),
+        ce("label",{style:Object.assign({},S.lbl,{fontWeight:700,display:"block",marginBottom:6})},"⏳ Vencimiento trial"),
+        ce("input",{style:S.inp,type:"date",value:trial,onChange:function(e){setTrial(e.target.value);}}),
         ce("div",{style:{display:"flex",gap:5,marginTop:6}},
-          [15,30,60].map(function(d){
-            return ce("button",{type:"button",key:d,
-              onClick:function(){var dt=new Date();dt.setDate(dt.getDate()+d);setPayDue(dt.toISOString().slice(0,10));},
-              style:{flex:1,padding:"5px",borderRadius:8,border:"1px solid "+C.border,background:"transparent",color:C.muted,fontSize:10,cursor:"pointer"}
-            },"+ "+d+"d");
-          })
-        ),
-        payDue&&(function(){
-          var d=Math.ceil((new Date(payDue)-new Date())/864e5);
-          var col=d<=0?C.err:d<=5?C.err:d<=15?C.warn:C.ok;
-          return ce("div",{style:{fontSize:10,color:col,marginTop:4,fontWeight:700}},
-            d<=0?"❌ Pago vencido hace "+Math.abs(d)+" día(s)":"💳 Vence en "+d+" día(s) — "+payDue);
-        })()
+          [7,14,30].map(function(d){return ce("button",{type:"button",key:d,onClick:function(){setTrial(addDays(d));},
+            style:{flex:1,padding:"5px",borderRadius:8,border:"1px solid "+C.border,background:"transparent",color:C.muted,fontSize:10,cursor:"pointer"}},"+"+d+"d");}))
       ),
       ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("b",{style:{fontSize:12,color:C.accent,display:"block",marginBottom:10}},"🧩 Módulos habilitados"),
+        ce("label",{style:Object.assign({},S.lbl,{fontWeight:700,display:"block",marginBottom:6})},"💳 Fecha de pago"),
+        ce("input",{style:S.inp,type:"date",value:pay,onChange:function(e){setPay(e.target.value);}}),
+        ce("div",{style:{display:"flex",gap:5,marginTop:6}},
+          [15,30,60].map(function(d){return ce("button",{type:"button",key:d,onClick:function(){setPay(addDays(d));},
+            style:{flex:1,padding:"5px",borderRadius:8,border:"1px solid "+C.border,background:"transparent",color:C.muted,fontSize:10,cursor:"pointer"}},"+"+d+"d");}))
+      ),
+      ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:10,border:"1px solid "+C.border}},
+        ce("b",{style:{fontSize:12,color:C.accent,display:"block",marginBottom:10}},"🧩 Módulos"),
         ce("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
           [["agenda","📅 Agenda",true],["clientes","👥 Clientes",true],
            ["sellos","🎫 Sellos",false],["catalogo","🛒 Catálogo",false],
            ["caja","💰 Caja",false],["reportes","📊 Reportes",false]
           ].map(function(x){
-            var key=x[0],icon=x[1],required=x[2],on=mods[key];
-            return ce("div",{key:key,
-              style:{background:on?C.accent+"11":"transparent",border:"1px solid "+(on?C.accent+"44":C.border),borderRadius:9,padding:"8px 10px",cursor:required?"default":"pointer"},
-              onClick:function(){if(!required)toggleMod(key);}},
+            var key=x[0],icon=x[1],req=x[2],on=!!mods[key];
+            return ce("div",{key:key,onClick:function(){if(!req)toggleMod(key);},
+              style:{background:on?C.accent+"11":"transparent",border:"1px solid "+(on?C.accent+"44":C.border),
+                borderRadius:9,padding:"8px 10px",cursor:req?"default":"pointer"}},
               ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
-                ce("span",{style:{fontSize:12}},icon," ",key),
-                ce(Toggle,{val:!!on,onChange:function(){if(!required)toggleMod(key);}})
-              )
+                ce("span",{style:{fontSize:12}},icon+" "+key),
+                ce(Toggle,{val:on,onChange:function(){if(!req)toggleMod(key);}})
+              ),
+              req&&ce("div",{style:{fontSize:8,color:C.warn,marginTop:2}},"🔒 Incluido")
             );
           })
         )
       ),
-      err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},err),
+      err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8,wordBreak:"break-all"}},err),
       ce("div",{style:{display:"flex",gap:10}},
         ce("button",{type:"button",style:Object.assign({},S.btn("ghost"),{flex:1}),onClick:p.onClose},"Cancelar"),
-        ce("button",{type:"button",style:Object.assign({},S.btn("gold"),{flex:2,color:"#000",opacity:load?0.6:1}),
-          disabled:load,onClick:save},load?"Guardando...":"Guardar cambios")
+        ce("button",{type:"button",
+          style:Object.assign({},S.btn("gold"),{flex:2,color:"#000",opacity:load?0.6:1}),
+          disabled:load,onClick:save
+        },load?"Guardando...":"Guardar cambios")
       )
     )
   );
