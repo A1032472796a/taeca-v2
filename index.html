@@ -191,13 +191,14 @@ function toDb(c, o) {
       delete d.wEnd;
     }
     if (d.blocks !== undefined) {
-      d.blocks = typeof d.blocks === "string" ? JSON.parse(d.blocks) : d.blocks || {};
+      /* clonar blocks para no mutar el estado de React */
+      d.blocks = Object.assign({}, typeof d.blocks === "string" ? JSON.parse(d.blocks) : d.blocks || {});
     }
     /* lunch: guardado dentro de blocks para no necesitar columnas extra */
     if (d.blocks && d.lunchStart !== undefined) { d.blocks._lunchStart = d.lunchStart || null; delete d.lunchStart; }
     if (d.blocks && d.lunchEnd !== undefined) { d.blocks._lunchEnd = d.lunchEnd || null; delete d.lunchEnd; }
     /* svcsConfig guardado dentro de blocks */
-    if (d.blocks && d.svcsConfig !== undefined) { d.blocks._svcsConfig = d.svcsConfig || {}; delete d.svcsConfig; }
+    if (d.blocks && d.svcsConfig !== undefined) { d.blocks._svcsConfig = Object.assign({}, d.svcsConfig || {}); delete d.svcsConfig; }
   }
   if (c === "config" && d.stampsOn !== undefined) {
     d.stamps_on = d.stampsOn;
