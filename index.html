@@ -2904,6 +2904,12 @@ function Public(p) {
     if (!stf) return false;
     var ds = ts(d);
     if (ds < today()) return false;
+    /* Bloquear slots que ya pasaron HOY */
+    if (ds === today()) {
+      var now2 = new Date();
+      var nowMins = now2.getHours() * 60 + now2.getMinutes();
+      if (pt(sl) <= nowMins) return false;
+    }
     if (!stf.workDays || stf.workDays.indexOf(d.getDay()) < 0) return false;
     var sm = pt(sl);
     if (sm < pt(stf.wStart || "09:00") || sm >= pt(stf.wEnd || "19:00")) return false;
