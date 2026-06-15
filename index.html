@@ -9018,7 +9018,7 @@ function EditCompanyMdl(p){
       ce("div",{style:{marginBottom:10}},
         ce("label",{style:S.lbl},"Tipo"),
         ce("select",{style:S.inp,value:type,onChange:function(e){setType(e.target.value);}},
-          TYPES.map(function(t){return ce("option",{key:t.v,value:t.v},t.l);})
+          [{v:"barberia",l:"Barbería"},{v:"tatuaje",l:"Tatuaje"},{v:"mixto",l:"Mixto"},{v:"estetica",l:"Estética"}].map(function(t){return ce("option",{key:t.v,value:t.v},t.l);})
         )
       ),
       ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"11px 13px",marginBottom:10,border:"1px solid "+C.border}},
