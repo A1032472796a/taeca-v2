@@ -310,6 +310,30 @@ function cacheClear(key) {
   try { localStorage.removeItem("taseca_cache_" + key); } catch(e) {}
 }
 
+
+/* CACHE localStorage TTL 5min */
+var CACHE_TTL = 5 * 60 * 1000;
+var _memCache = {};
+function cacheGet(key) {
+  if (_memCache[key] && (Date.now() - _memCache[key].t) < CACHE_TTL) return _memCache[key].v;
+  try {
+    var r2 = localStorage.getItem("taseca_cache_" + key);
+    if (!r2) return null;
+    var obj = JSON.parse(r2);
+    if (Date.now() - obj.t > CACHE_TTL) { localStorage.removeItem("taseca_cache_" + key); return null; }
+    _memCache[key] = obj; return obj.v;
+  } catch(e) { return null; }
+}
+function cacheSet(key, val) {
+  var obj = { t: Date.now(), v: val };
+  _memCache[key] = obj;
+  try { localStorage.setItem("taseca_cache_" + key, JSON.stringify(obj)); } catch(e) {}
+}
+function cacheClear(key) {
+  delete _memCache[key];
+  try { localStorage.removeItem("taseca_cache_" + key); } catch(e) {}
+}
+
 var DB = {
   all: function () {
     var _all = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee(c) {
@@ -363,6 +387,7 @@ var DB = {
           case 0:
             p = toDb(c, data);
             p.id = id;
+            cacheClear(c + "_" + (window._companyId || "root"));
             cacheClear(c + "_" + (window._companyId || "root"));
             if (SB.co(c) && window._companyId) p.company_id = window._companyId;
             Object.keys(p).forEach(function (k) {
@@ -1878,6 +1903,9 @@ function SchedMdl(p) {
   var bls = _useState(u.blocks || {});
   var bl = bls[0];
   var setBl = bls[1];
+  var savingS = _useState("idle");
+  var saving = savingS[0];
+  var setSaving = savingS[1];
   var savingS = _useState("idle");
   var saving = savingS[0];
   var setSaving = savingS[1];
@@ -8977,7 +9005,7 @@ function EditCompanyMdl(p){
     }).catch(function(e){setErr(e.message);setLoad(false);});
   }
   var ce=React.createElement;
-  return ce("div",{style:Object.assign({},S.ov,{zIndex:400}),onClick:p.onClose},
+  return ce("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:p.onClose},
     ce("div",{style:Object.assign({},S.mb,{maxHeight:"90vh"}),onClick:function(e){e.stopPropagation();}},
       ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
         ce("b",{style:{fontSize:15,color:C.accent}},"✏️ Editar empresa: ",co.company_name),
