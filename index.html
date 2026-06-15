@@ -1849,6 +1849,9 @@ function SchedMdl(p) {
   var bls = _useState(u.blocks || {});
   var bl = bls[0];
   var setBl = bls[1];
+  var savingS = _useState("idle");
+  var saving = savingS[0];
+  var setSaving = savingS[1];
   var days = calDays(yr, mo);
   function togDay(d) {
     setWd(function (p) {
@@ -1878,6 +1881,7 @@ function SchedMdl(p) {
   }).length;
   var slots = Math.floor((pt(we) - pt(ws)) / 30);
   function save() {
+    setSaving("saving");
     var upd = Object.assign({}, u, {
       workDays: wd,
       wStart: ws,
@@ -1886,7 +1890,16 @@ function SchedMdl(p) {
       lunchEnd: lunchEnd || null,
       blocks: bl
     });
-    p.onSave(upd);
+    /* Wrap onSave para capturar resultado */
+    var prom;
+    try { prom = p.onSave(upd); } catch(e) { setSaving("error"); return; }
+    if (prom && typeof prom.then === "function") {
+      prom.then(function(){ setSaving("ok"); setTimeout(function(){ setSaving("idle"); p.close && p.close(); }, 1200); })
+           .catch(function(e){ setSaving("error"); console.error(e); });
+    } else {
+      setSaving("ok");
+      setTimeout(function(){ setSaving("idle"); }, 1200);
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: S.ov,
@@ -2179,8 +2192,16 @@ function SchedMdl(p) {
     style: _objectSpread(_objectSpread({}, S.btn()), {}, {
       flex: 2
     }),
-    onClick: save
-  }, "Guardar horario")))));
+    onClick: saving === "saving" ? null : save,
+    disabled: saving === "saving",
+    style: _objectSpread(_objectSpread({}, S.btn(
+      saving === "ok" ? "cyan" : saving === "error" ? "err" : undefined
+    )), {}, { flex: 2 })
+  },
+    saving === "saving" ? "\u23f3 Guardando..." :
+    saving === "ok" ? "\u2705 Guardado!" :
+    saving === "error" ? "\u274c Error al guardar" :
+    "Guardar horario")))));
 }
 
 /* ─── REPORTES ──────────────────────────────────────────────────── */
