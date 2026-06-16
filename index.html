@@ -7378,7 +7378,7 @@ function Admin(p) {
       gap: 6,
       marginBottom: 12
     }
-  }, [["servicios", "Servicios"], ["productos", "Productos"]].map(function (x) {
+  }, [["servicios", "Servicios"], ["productos", "Productos"]].filter(function(x){ return user.role !== "vendedor" || x[0] === "productos"; }).map(function (x) {
     return /*#__PURE__*/React.createElement("button", {
       type: "button",
       key: x[0],
@@ -7507,7 +7507,7 @@ function Admin(p) {
         color: C.accent,
         fontSize: 14
       }
-    }, "$", pr.price)), isAdmin && /*#__PURE__*/React.createElement("div", {
+    }, "$", pr.price)), (isAdmin || user.role === "vendedor") && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 7,
         display: "flex",
@@ -7561,7 +7561,7 @@ function Admin(p) {
       color: C.muted,
       fontSize: 11
     }
-  }, "\uD83D\uDCCB Solo lectura"), isAdmin && /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDCCB Solo lectura"), (isAdmin || (user.role === "vendedor" && sub === "productos")) && /*#__PURE__*/React.createElement("button", {
     type: "button",
     style: {
       position: "fixed",
