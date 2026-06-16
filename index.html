@@ -614,7 +614,11 @@ function pt(t) {
   return parseInt(p[0]) * 60 + parseInt(p[1]);
 }
 function ts(d) {
-  return d.toISOString().slice(0, 10);
+  /* Fix UTC offset bug: usar fecha local no UTC */
+  var y = d.getFullYear();
+  var m = d.getMonth() + 1;
+  var dd = d.getDate();
+  return y + "-" + (m < 10 ? "0" : "") + m + "-" + (dd < 10 ? "0" : "") + dd;
 }
 function today() {
   return ts(new Date());
