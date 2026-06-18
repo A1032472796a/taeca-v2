@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Taseca · Barber & Tattoo</title>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div id="root">
+  <div style="color:#c9a84c;text-align:center;padding:40px;font-size:18px">Cargando Taseca...</div>
+</div>
+
+<!-- ── Globals ── -->
+<script>
+  window.SB_URL = "https://xqezegrphnwfxyuxadzd.supabase.co";
+  window.SB_KEY = "sb_publishable_IY28r6SMHCOavF4a8XHJQQ_uTFMZseW";
+
+  window.EMAILJS_SVC = "YOUR_SERVICE_ID";
+  window.EMAILJS_TPL = "YOUR_TEMPLATE_ID";
+  window.EMAILJS_KEY = "YOUR_PUBLIC_KEY";
+
+  // Detectar empresa por ?e=slug o subdominio
+  (function () {
+    const params   = new URLSearchParams(window.location.search);
+    const paramSlug = params.get("e") || null;
+    const host      = window.location.hostname;
+    const parts     = host.split(".");
+    const skipSubs  = ["app","www","localhost","127"];
+    const subSlug   = (parts.length >= 3 && !skipSubs.includes(parts[0])) ? parts[0] : null;
+    window._companySlug = paramSlug || subSlug || null;
+    window._companyId   = null;
+    console.log("[Taseca] slug:", window._companySlug || "(sin empresa)");
+  })();
+</script>
+
+<!-- ── React (UMD, no build needed) ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+<!-- ── EmailJS ── -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<!-- ── App entry (ES Module) ── -->
+<script type="module">
+  import { App } from "./js/app.js";
+  ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
+</script>
+</body>
+</html>
