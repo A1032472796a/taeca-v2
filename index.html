@@ -4,7 +4,9 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Taseca · Barber & Tattoo</title>
-  <link rel="stylesheet" href="css/styles.css"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#080c10"/>
 </head>
 <body>
 <div id="root">
@@ -22,7 +24,7 @@
 
   // Detectar empresa por ?e=slug o subdominio
   (function () {
-    const params   = new URLSearchParams(window.location.search);
+    const params    = new URLSearchParams(window.location.search);
     const paramSlug = params.get("e") || null;
     const host      = window.location.hostname;
     const parts     = host.split(".");
@@ -43,7 +45,7 @@
 
 <!-- ── App entry (ES Module) ── -->
 <script type="module">
-  import { App } from "./js/app.js";
+  import { App } from "./app.js";
   ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
 </script>
 </body>
