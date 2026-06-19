@@ -284,18 +284,23 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
 
   function CliMdl(){
     const d=mdl?.d||{};
-    const [n,setN]=useState(d.name||""); const [ph,setPh]=useState(d.phone||""); const [cerr,setCerr]=useState("");
+    const [n,setN]=useState(d.name||""); const [ph,setPh]=useState(d.phone||"");
+    const [em,setEm]=useState(d.email||""); const [bd,setBd]=useState(d.bday||"");
+    const [cerr,setCerr]=useState("");
     async function save(){
       setCerr("");
       if(!n){setCerr("Nombre obligatorio");return;}
       if(ph&&!vPhone(ph)){setCerr("Teléfono debe tener 10 dígitos");return;}
-      const item={id:d.id||"c"+Date.now(),name:n,phone:ph,visits:d.visits||0,last:d.last||"-",stamps:d.stamps||0,pts:d.pts||0,since:d.since||today()};
+      const item={id:d.id||"c"+Date.now(),name:n,phone:ph,email:em,bday:bd,
+        visits:d.visits||0,last:d.last||"-",stamps:d.stamps||0,pts:d.pts||0,since:d.since||today()};
       d.id?setClients(x=>x.map(s=>s.id===d.id?item:s)):setClients(x=>[...x,item]);
       closeM(); try{await DB.save("clients",item.id,item);}catch(e){console.error(e);}
     }
     return ce(Mdl,{title:d.id?"Editar Cliente":"Nuevo Cliente",close:closeM,save},
       ce(Field,{label:"Nombre completo",val:n,set:setN,ph:"Carlos Méndez"}),
       ce(PhoneInput,{val:ph,set:setPh}),
+      ce(Field,{label:"Email (opcional)",val:em,set:setEm,ph:"carlos@email.com",type:"email"}),
+      ce(Field,{label:"Fecha de cumpleaños (opcional)",val:bd,set:setBd,type:"date"}),
       cerr&&ce("div",{style:{color:C.err,fontSize:12,marginBottom:8}},"⚠️ ",cerr)
     );
   }
@@ -832,7 +837,12 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                 ce("div",{style:S.row},
                   ce("div",{style:{display:"flex",alignItems:"center",gap:9}},
                     ce("div",{style:{width:38,height:38,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}},c.name[0]),
-                    ce("div",null,ce("b",{style:{fontSize:13}},c.name),ce("div",{style:{color:C.muted,fontSize:11}},"📞 ",c.phone))
+                    ce("div",null,
+                      ce("b",{style:{fontSize:13}},c.name),
+                      ce("div",{style:{color:C.muted,fontSize:11}},"📞 ",c.phone),
+                      c.email&&ce("div",{style:{color:C.muted,fontSize:11}},"✉️ ",c.email),
+                      c.bday&&ce("div",{style:{color:C.muted,fontSize:11}},"🎂 ",c.bday)
+                    )
                   ),
                   ce("span",{style:S.badge(C.accent)},c.visits||0," visitas")
                 ),
@@ -944,13 +954,44 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               ),
               ce("div",{className:"desktop-2col"},
                 (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"):cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"):prodSales).map(s=>{
-                  const isDebt=s.method==="debe", pend2=isDebt?(s.pendiente||0):0;
-                  return ce("div",{key:s.id,style:{...S.card,border:"1px solid "+(isDebt?C.warn+"55":C.border)}},
+                  const isDebt=s.method==="debe";
+                  const abonos3=s.abonos||[];
+                  const totalAb3=abonos3.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
+                  const pend2=isDebt?(s.pendiente!==undefined?Number(s.pendiente):Math.max(0,s.total-totalAb3)):0;
+                  const isVencida=isDebt&&s.dueDate&&s.dueDate<today();
+                  return ce("div",{key:s.id,style:{...S.card,border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)}},
                     ce("div",{style:S.row},
-                      ce("div",{style:{flex:1,minWidth:0}},ce("b",{style:{fontSize:12}},s.client),s.phone&&ce("div",{style:{color:C.muted,fontSize:10}},"📞 ",s.phone),ce("div",{style:{color:C.muted,fontSize:10,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))),
-                      ce("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},ce("b",{style:{color:isDebt?C.warn:C.accent,fontSize:13}},"$",isDebt?pend2:s.total),ce("div",null,ce("span",{style:S.badge(isDebt?C.warn:C.ok)},isDebt?"⏳ Debe":s.method)))
+                      ce("div",{style:{flex:1,minWidth:0}},
+                        ce("b",{style:{fontSize:12}},s.client),
+                        s.phone&&ce("div",{style:{color:C.muted,fontSize:10}},"📞 ",s.phone),
+                        ce("div",{style:{color:C.muted,fontSize:10,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))
+                      ),
+                      ce("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},
+                        // Si hay deuda mostrar pendiente grande y total pequeño
+                        isDebt
+                          ? ce("div",null,
+                              ce("b",{style:{color:isVencida?C.err:C.warn,fontSize:16,display:"block"}},"$",pend2),
+                              ce("div",{style:{fontSize:9,color:C.muted}},"de $",s.total," total"),
+                              totalAb3>0&&ce("div",{style:{fontSize:9,color:C.ok}},"✓ Abonado: $",totalAb3)
+                            )
+                          : ce("b",{style:{color:C.accent,fontSize:13}},"$",s.total),
+                        ce("div",{style:{marginTop:3}},ce("span",{style:S.badge(isVencida?C.err:isDebt?C.warn:C.ok)},isVencida?"🚨 Vencido":isDebt?"⏳ Debe":s.method))
+                      )
                     ),
-                    ce("div",{style:{marginTop:5,fontSize:10,color:C.muted}},"📆 ",s.date),
+                    // Barra de progreso de pago
+                    isDebt&&totalAb3>0&&ce("div",{style:{margin:"7px 0 4px"}},
+                      ce("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:3}},
+                        ce("span",null,"Pagado: $",totalAb3),
+                        ce("span",null,"Pendiente: ",ce("b",{style:{color:isVencida?C.err:C.warn}},"$",pend2))
+                      ),
+                      ce("div",{style:{background:C.border,borderRadius:20,height:5,overflow:"hidden"}},
+                        ce("div",{style:{width:Math.min(100,s.total>0?Math.round(totalAb3/s.total*100):0)+"%",height:"100%",background:"linear-gradient(90deg,"+C.ok+","+C.accent+")",borderRadius:20}})
+                      )
+                    ),
+                    ce("div",{style:{marginTop:4,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}},
+                      ce("span",{style:{color:C.muted,fontSize:10}},"📆 ",s.date),
+                      isDebt&&s.dueDate&&ce("span",{style:{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}},isVencida?"🚨 Vencido:":"Límite:"," ",s.dueDate)
+                    ),
                     (isDebt&&(isAdmin||user.role==="vendedor"))&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
                       ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"7px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn},onClick:()=>setAbonoMdl({...s,_table:"product_sales"})},"💵 Abonar"),
                       ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"7px",fontSize:11,color:"#000"},onClick:()=>{
