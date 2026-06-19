@@ -133,22 +133,30 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
         const sc      = STAFF_COLORS[si % STAFF_COLORS.length];
         const iw      = isWork(su, cur, hr, mn);
         const ib      = su.blocks?.[ts(cur)] === true;
+        const slotMins = hr*60+mn;
         const isLunch = !!(su.lunchStart && su.lunchEnd &&
-                           (hr*60+mn) >= pt(su.lunchStart) && (hr*60+mn) < pt(su.lunchEnd));
+                           slotMins >= pt(su.lunchStart) && slotMins < pt(su.lunchEnd));
+        // Also block if a service starting here would invade lunch
+        // We check with a default of 30min since we don't know the service duration here
+        // The real check happens in slotOk/public.js — here we just show the visual block
+        const wouldInvadeLunch = !isLunch && su.lunchStart && su.lunchEnd &&
+          slotMins < pt(su.lunchStart) &&
+          slotMins + 15 > pt(su.lunchStart); // slot de 15min que toca el almuerzo
         const isToday = ts(cur) === today();
         const slotAppts = getStaffAppts(su.id, ts(cur), hr, mn);
         const slotStr = (hr<10?"0":"")+hr+":"+String(mn).padStart(2,"0");
-        const isDragTarget = dragging && dragOver === su.id+"_"+slotStr && iw && !ib;
+        const isDragTarget   = dragging && dragOver === su.id+"_"+slotStr && iw && !ib;
+        const isConflict     = dragging && dragOver === "conflict_"+slotStr;
         return ce("div", { key:su.id,
-          onClick: () => { if (!dragging && slotAppts.length > 0) onAppt(slotAppts[0]); else if (!dragging && iw && !ib && !isLunch) onSlot(cur, hr, mn, su.id); },
+          onClick: () => { if (!dragging && slotAppts.length > 0) onAppt(slotAppts[0]); else if (!dragging && iw && !ib && !isLunch && !wouldInvadeLunch) onSlot(cur, hr, mn, su.id); },
           onDragOver: e => iw && !ib ? handleDragOver(e, su.id+"_"+slotStr) : null,
           onDragLeave: () => setDragOver(null),
           onDrop: e => handleDrop(e, hr, mn, su),
           style:{ flex:1, minWidth:120, borderLeft:"2px solid "+sc+"66", position:"relative",
-                  background: isDragTarget ? sc+"22" : !iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
-                  cursor: dragging ? "copy" : iw && !ib ? "pointer" : "default",
+                  background: isConflict?C.err+"22":isDragTarget?sc+"22":!iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
+                  cursor: dragging?(isDragTarget?"copy":"no-drop"):iw&&!ib?"pointer":"default",
                   overflow:"visible",
-                  outline: isDragTarget ? "2px dashed "+sc : "none" } },
+                  outline: isConflict?"2px dashed "+C.err:isDragTarget?"2px dashed "+sc:"none" } },
           ce("div", { style:{ position:"absolute", left:0, top:0, bottom:0, width:2, background:sc+"44" } }),
           slotAppts.map((a, ai) => {
             const aCol = SC[a.status] || sc;
@@ -182,6 +190,8 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
           ib && ce("div", { style:{ position:"absolute", inset:0,
             background: isLunch
               ? "repeating-linear-gradient(45deg,#f39c1233,#f39c1233 3px,transparent 3px,transparent 7px)"
+              : wouldInvadeLunch
+              ? "repeating-linear-gradient(45deg,#f39c1222,#f39c1222 2px,transparent 2px,transparent 6px)"
               : "repeating-linear-gradient(45deg,"+C.err+"11,"+C.err+"11 3px,transparent 3px,transparent 7px)" } }),
           iw && !ib && slotAppts.length === 0 && ce("div", {
             style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", paddingLeft:8, opacity:0 },
