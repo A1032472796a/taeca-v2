@@ -212,149 +212,83 @@ export function App() {
     boot();
   }, [init]);
 
-  // ─── NOTIFICACIONES EN TIEMPO REAL (Supabase Realtime) ─────────
+  // ─── NOTIFICACIONES: polling cada 30s para citas nuevas ─────────
   useEffect(() => {
-    if (!window.SB_URL || !window.SB_KEY) return;
+    // Guardar IDs conocidos al arrancar
+    const knownIds = new Set(appts.map(a => a.id));
 
-    function showApptNotif(appt) {
-      // Buscar nombre del barbero
-      const staffName = users.find(u => u.id === (appt.stId||appt.st_id))?.name || "Tu profesional";
-      const svcName   = appt.svc || appt.svc_name || "Servicio";
-      const client    = appt.client || "Cliente";
-      const date      = appt.date  || "";
-      const time      = appt.time  || "";
+    function showApptNotif(a) {
+      const staffName = users.find(u => u.id === (a.stId||a.st_id))?.name || "Tu profesional";
+      const title     = "📅 Nueva cita — " + (a.client || "Cliente");
+      const body      = `✂️ ${a.svc||"Servicio"} · 👨 ${staffName}\n📆 ${a.date} a las ${a.time}`;
 
-      const msg = `📅 Nueva cita
-👤 ${client}
-✂️ ${svcName}
-👨 ${staffName}
-📆 ${date} a las ${time}`;
-
-      // 1. Notificación del navegador
-      if (window.Notification && Notification.permission === "granted") {
-        try {
-          new Notification("📅 Nueva cita — Taseca", {
-            body: `${client} · ${svcName} · ${staffName}
-${date} a las ${time}`,
-            icon: "/icon-192.png",
-            badge: "/icon-96.png",
-            tag: "appt-" + (appt.id || Date.now())
-          });
-        } catch(e) {}
+      // 1. Notificación nativa del navegador
+      if (window.Notification?.permission === "granted") {
+        try { new Notification(title, { body, icon:"/icon-192.png", tag:"appt-"+a.id }); } catch {}
       }
 
-      // 2. Banner visual en pantalla
-      const banner = document.createElement("div");
-      banner.innerHTML = `
-        <div style="display:flex;align-items:flex-start;gap:10px">
-          <div style="font-size:24px;flex-shrink:0">📅</div>
-          <div>
-            <div style="font-weight:900;font-size:14px;color:#c9a84c;margin-bottom:3px">Nueva cita agendada</div>
-            <div style="font-size:12px;color:#f0f0f0"><b>${client}</b></div>
-            <div style="font-size:11px;color:#9aa">✂️ ${svcName} · 👨 ${staffName}</div>
-            <div style="font-size:11px;color:#4ecdc4;margin-top:2px">📆 ${date} a las <b>${time}</b></div>
+      // 2. Banner visual
+      const div = document.createElement("div");
+      div.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#111820;border:1.5px solid #c9a84c;border-radius:14px;padding:14px 16px;max-width:300px;box-shadow:0 4px 24px #000c;font-family:system-ui,sans-serif;animation:tslideIn .3s ease";
+      div.innerHTML = `
+        <style>@keyframes tslideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}</style>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="font-size:22px">📅</div>
+          <div style="flex:1">
+            <div style="font-weight:900;color:#c9a84c;font-size:13px;margin-bottom:4px">Nueva cita agendada</div>
+            <div style="color:#f0f0f0;font-size:12px;font-weight:700">${a.client||"Cliente"}</div>
+            <div style="color:#aaa;font-size:11px;margin-top:2px">✂️ ${a.svc||""} · 👨 ${staffName}</div>
+            <div style="color:#4ecdc4;font-size:11px;font-weight:700;margin-top:3px">📆 ${a.date} · ${a.time}</div>
           </div>
-          <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#6a7a8a;font-size:18px;cursor:pointer;margin-left:auto;flex-shrink:0">×</button>
+          <button onclick="this.closest('div[style]').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>
         </div>`;
-      banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999;background:#111820;border:1.5px solid #c9a84c55;border-radius:14px;padding:14px 16px;max-width:320px;box-shadow:0 4px 24px #000a;animation:slideIn .3s ease";
-      if (!document.getElementById("taseca-notif-style")) {
-        const st = document.createElement("style");
-        st.id = "taseca-notif-style";
-        st.textContent = "@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}";
-        document.head.appendChild(st);
-      }
-      document.body.appendChild(banner);
-      setTimeout(() => { try { banner.remove(); } catch {} }, 8000);
+      document.body.appendChild(div);
+      setTimeout(() => { try { div.remove(); } catch {} }, 9000);
 
-      // 3. Sonido de notificación
+      // 3. Sonido
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        [523, 659, 784].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          osc.type = "sine";
-          gain.gain.setValueAtTime(0.15, ctx.currentTime + i*0.15);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.15 + 0.3);
-          osc.start(ctx.currentTime + i*0.15);
-          osc.stop(ctx.currentTime + i*0.15 + 0.3);
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        [523,659,784].forEach((f,i) => {
+          const o=ctx.createOscillator(), g=ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value=f; o.type="sine";
+          g.gain.setValueAtTime(0.12, ctx.currentTime+i*.18);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+i*.18+.35);
+          o.start(ctx.currentTime+i*.18); o.stop(ctx.currentTime+i*.18+.35);
         });
       } catch {}
     }
 
-    // Conectar a Supabase Realtime via WebSocket
-    const companyFilter = window._companyId ? `company_id=eq.${window._companyId}` : null;
-    const wsUrl = window.SB_URL.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=" + window.SB_KEY + "&vsn=1.0.0";
-
-    let ws, pingInterval, reconnectTimeout;
-    let knownIds = new Set();
-
-    function connect() {
+    async function checkNewAppts() {
       try {
-        ws = new WebSocket(wsUrl);
+        // Limpiar cache para traer datos frescos
+        const ck = "taseca_cache_appointments_" + (window._companyId||"root");
+        try { localStorage.removeItem(ck); } catch {}
+        delete window._memCache?.[ck];
 
-        ws.onopen = () => {
-          console.log("[Taseca] Realtime conectado ✓");
-          // Join channel
-          ws.send(JSON.stringify({
-            topic: "realtime:public:appointments" + (companyFilter ? ":" + companyFilter : ""),
-            event: "phx_join",
-            payload: { config: { broadcast: { self: false }, presence: { key: "" } } },
-            ref: "1"
-          }));
-          // Heartbeat cada 30s
-          pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: null }));
-            }
-          }, 30000);
-        };
-
-        ws.onmessage = (e) => {
-          try {
-            const msg = JSON.parse(e.data);
-            if (msg.event === "INSERT" && msg.payload?.record) {
-              const appt = msg.payload.record;
-              // Evitar duplicados
-              if (knownIds.has(appt.id)) return;
-              knownIds.add(appt.id);
-              // Normalizar campo st_id → stId
-              if (appt.st_id && !appt.stId) appt.stId = appt.st_id;
-              // Actualizar estado React
-              setAppts(prev => {
-                if (prev.some(a => a.id === appt.id)) return prev;
-                return [...prev, appt];
-              });
-              // Mostrar notificación
-              showApptNotif(appt);
-            }
-          } catch {}
-        };
-
-        ws.onclose = () => {
-          clearInterval(pingInterval);
-          console.log("[Taseca] Realtime desconectado — reconectando en 5s...");
-          reconnectTimeout = setTimeout(connect, 5000);
-        };
-
-        ws.onerror = () => ws.close();
-
+        const fresh = await DB.all("appointments");
+        const newOnes = fresh.filter(a => !knownIds.has(a.id));
+        newOnes.forEach(a => {
+          knownIds.add(a.id);
+          showApptNotif(a);
+        });
+        if (newOnes.length > 0) {
+          setAppts(fresh);
+        }
       } catch(e) {
-        console.warn("[Taseca] Realtime no disponible:", e.message);
+        console.warn("[Taseca] notif check error:", e.message);
       }
     }
 
-    connect();
+    // Inicializar knownIds con las citas actuales
+    appts.forEach(a => knownIds.add(a.id));
 
-    return () => {
-      clearTimeout(reconnectTimeout);
-      clearInterval(pingInterval);
-      try { ws?.close(); } catch {}
-    };
-  }, [users]); // re-subscribe cuando cambian los usuarios (para tener nombres actualizados)
+    const iv = setInterval(checkNewAppts, 30000); // cada 30 segundos
+    return () => clearInterval(iv);
+  }, []); // solo una vez
 
   // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
+  useEffect(() => {  // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
   useEffect(() => {
     async function refresh() {
       if (!window._companyId && window._companySlug) return; // aún no inicializado
