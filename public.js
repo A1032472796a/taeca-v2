@@ -39,7 +39,11 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     const sm = pt(sl);
     if (sm < pt(stf.wStart||"09:00") || sm >= pt(stf.wEnd||"19:00")) return false;
     if (stf.blocks?.[ds] === true) return false;
+    // Bloquear si el slot está DENTRO del almuerzo
     if (stf.lunchStart && stf.lunchEnd && sm >= pt(stf.lunchStart) && sm < pt(stf.lunchEnd)) return false;
+    // Bloquear si el servicio INVADE el almuerzo (ej: 12:30 + 40min invade 13:00)
+    const dur3 = svc ? svc.dur : 30;
+    if (stf.lunchStart && sm + dur3 > pt(stf.lunchStart)) return false;
     // Check that no appointment overlaps within the service duration
     const slMins = pt(sl);
     const dur2 = svc ? svc.dur : 30;
