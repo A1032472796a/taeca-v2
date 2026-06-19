@@ -313,7 +313,17 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     const [cn,setCn]=useState(d.client||""); const [sv,setSv]=useState(d.svc||"");
     const [dt2,setDt2]=useState(d.date||""); const [tm2,setTm2]=useState(d.time||"");
     const [st2,setSt2]=useState(d.status||"pendiente"); const [sf,setSf]=useState(d.stId||selSt||"");
+    const [aph,setAph]=useState(d.phone||""); const [aem,setAem]=useState(d.email||"");
     const [ae,setAe]=useState(""); const [load2,setLoad2]=useState(false);
+    const [clientFound3,setClientFound3]=useState(null);
+    function handleApptPhone(v){
+      const digits=v.replace(/\D/g,"").slice(0,10); setAph(digits);
+      if(digits.length===10){
+        const f=clients.find(c=>c.phone===digits);
+        if(f){setClientFound3(f);setCn(f.name);setAem(f.email||"");}
+        else setClientFound3(null);
+      } else setClientFound3(null);
+    }
     async function save(){
       setAe("");
       if(!blk&&!cn){setAe("El nombre del cliente es obligatorio");return;}
@@ -340,11 +350,23 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         const svcObj=svcs.find(s=>s.name===sv)||null;
         const selU2=staffL.find(u=>u.id===sf);
         const empCfg=selU2?.svcsConfig?.[svcObj?.id];
+        // Si es cliente nuevo con teléfono, registrarlo automáticamente
+        if(aph&&aph.length===10&&!clientFound3&&cn){
+          const newCli={id:"c"+Date.now(),name:cn,phone:aph,email:aem,visits:0,last:"-",stamps:0,pts:0,since:today()};
+          setClients(x=>[...x,newCli]);
+          DB.save("clients",newCli.id,newCli).catch(()=>{});
+        } else if(clientFound3){
+          // Actualizar última visita
+          const upd={...clientFound3,visits:(clientFound3.visits||0)+1,last:today()};
+          setClients(x=>x.map(c=>c.id===clientFound3.id?upd:c));
+          DB.save("clients",clientFound3.id,upd).catch(()=>{});
+        }
         const item={
-          id:d.id||"a"+Date.now(), client:cn, svc:sv, svcId:svcObj?.id||"",
+          id:d.id||"a"+Date.now(), client:cn, phone:aph, email:aem,
+          svc:sv, svcId:svcObj?.id||"",
           svcPrice:empCfg?.price||(svcObj?.price||0), stId:sf,
           date:wi?today():dt2,
-          time:wi?(now2.getHours()<10?"0":"")+now2.getHours()+":"+(now2.getMinutes()<30?"00":"30"):tm2,
+          time:wi?((now2.getHours()<10?"0":"")+now2.getHours()+":"+String(Math.floor(now2.getMinutes()/15)*15).padStart(2,"0")):tm2,
           status:blk?"bloqueado":wi?"walk_in":st2,
           dur:empCfg?.dur||(svcObj?.dur||30)
         };
@@ -367,7 +389,25 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         ce("button",{type:"button",onClick:()=>{setWi(true);setBlk(false);},style:{...S.btn(wi?"cyan":"ghost"),flex:1,fontSize:12,color:wi?"#000":C.muted}},"⚡ Walk-in"),
         ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(true);},style:{...S.btn(blk?"err":"ghost"),flex:1,fontSize:12,color:blk?"#fff":C.muted}},"🔒 Bloquear")
       ),
-      !blk&&ce(Field,{label:"Cliente",val:cn,set:setCn,ph:"Nombre"}),
+      !blk&&ce("div",{style:{marginBottom:10}},
+        ce("label",{style:S.lbl},"Teléfono (busca cliente automáticamente)"),
+        ce("div",{style:{position:"relative"}},
+          ce("input",{
+            style:{...S.inp,borderColor:aph.length>0?aph.length===10?C.ok:C.err:C.border},
+            type:"tel",placeholder:"3001234567 (opcional)",value:aph,
+            onChange:e2=>handleApptPhone(e2.target.value),
+            onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+          }),
+          aph.length>0&&ce("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:10,color:aph.length===10?C.ok:C.err,fontWeight:700}},aph.length+"/10")
+        )
+      ),
+      !blk&&clientFound3&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}},
+        ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},clientFound3.name[0]),
+        ce("div",null,ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ "+clientFound3.name),ce("div",{style:{fontSize:10,color:C.muted}},clientFound3.visits||0," visitas · ",clientFound3.stamps||0," sellos"))
+      ),
+      !blk&&!clientFound3&&aph.length===10&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"7px 12px",marginBottom:8,fontSize:11,color:C.warn}},"📋 Número nuevo — se registrará como cliente al guardar"),
+      !blk&&ce(Field,{label:"Nombre completo *",val:cn,set:setCn,ph:"Carlos Pérez"}),
+      !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
       ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
       !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
       !wi&&!blk&&ce(React.Fragment,null,
