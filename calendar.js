@@ -28,8 +28,14 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
   const wa    = fSt === "all" ? waAll : waAll.filter(a => a.status === fSt);
 
   function getStaffAppts(uid, ds, hr, mn) {
-    const slot = (hr < 10 ? "0" : "") + hr + ":" + String(mn).padStart(2, "0");
-    return wa.filter(a => (a.stId || a.st_id) === uid && a.date === ds && a.time === slot);
+    const slotMins = hr * 60 + mn;
+    const slotEnd  = slotMins + 15;
+    return wa.filter(a => {
+      if ((a.stId || a.st_id) !== uid || a.date !== ds) return false;
+      const aMins = pt(a.time);
+      // Mostrar la cita en el slot donde empieza (cualquier minuto dentro del slot de 15min)
+      return aMins >= slotMins && aMins < slotEnd;
+    });
   }
   function isWork(staffUser, date, hr, mn) {
     if (!staffUser) return true;
