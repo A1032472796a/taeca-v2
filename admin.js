@@ -220,6 +220,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [abonoMdl,    setAbonoMdl]    = useState(null);
   const [reschedMdl,  setReschedMdl]  = useState(null); // cita a reagendar
   const [prodSearch,setProdSearch] = useState("");
+  const [cliSearch, setCliSearch]  = useState("");
+  const [svcSearch, setSvcSearch]  = useState("");
   const [notifs,   setNotifs]   = useState([]);
   const [showN,    setShowN]    = useState(false);
   const staffL = users.filter(u=>u.role==="barbero"||u.role==="tatuador");
@@ -832,33 +834,24 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           // CLIENTES
           tab==="clientes"&&ce("div",null,
             ce("b",{style:{fontSize:15,color:C.accent,display:"block",marginBottom:8}},"👥 Clientes"),
-            // Barra de búsqueda
-            (()=>{
-              const [cliQ, setCliQ] = React.useState("");
-              const filtered = cliQ.trim()
-                ? visClients.filter(c => {
-                    const q = cliQ.toLowerCase();
-                    return c.name.toLowerCase().includes(q) || (c.phone||"").includes(q) || (c.email||"").toLowerCase().includes(q);
-                  })
-                : visClients;
-              return ce("div", null,
-                ce("div",{style:{position:"relative",marginBottom:12}},
-                  ce("input",{style:{...S.inp,paddingLeft:34},
-                    placeholder:"🔍 Buscar por nombre, celular o email...",
-                    value:cliQ,
-                    onChange:e2=>setCliQ(e2.target.value),
-                    onKeyDown:e2=>{if(e2.key==="Escape")setCliQ("");}
-                  }),
-                  cliQ&&ce("button",{type:"button",onClick:()=>setCliQ(""),
-                    style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}
-                  },"×"),
-                  ce("div",{style:{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:13,pointerEvents:"none"}},"🔍")
-                ),
-                cliQ&&ce("div",{style:{fontSize:11,color:C.muted,marginBottom:8}},
-                  filtered.length," resultado"+(filtered.length===1?"":"s")+" de ",visClients.length," clientes"
-                ),
-                ce("div",{className:"desktop-2col"},
-                  filtered.map(c=>ce("div",{key:c.id,style:S.card},
+            // Barra de búsqueda clientes
+            ce("div",{style:{position:"relative",marginBottom:12}},
+              ce("input",{style:{...S.inp,paddingLeft:12},
+                placeholder:"🔍 Buscar por nombre, celular o email...",
+                value:cliSearch,
+                onChange:e2=>setCliSearch(e2.target.value),
+                onKeyDown:e2=>{if(e2.key==="Escape")setCliSearch("");}
+              }),
+              cliSearch&&ce("button",{type:"button",onClick:()=>setCliSearch(""),
+                style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}
+              },"×")
+            ),
+            cliSearch&&ce("div",{style:{fontSize:11,color:C.muted,marginBottom:8}},
+              (()=>{const n=visClients.filter(c=>{const q=cliSearch.toLowerCase();return c.name.toLowerCase().includes(q)||(c.phone||"").includes(q)||(c.email||"").toLowerCase().includes(q);}).length; return n+" resultado"+(n===1?"":"s")+" de "+visClients.length+" clientes";})()
+            ),
+            ce("div",{className:"desktop-2col"},
+              (cliSearch.trim()?visClients.filter(c=>{const q=cliSearch.toLowerCase();return c.name.toLowerCase().includes(q)||(c.phone||"").includes(q)||(c.email||"").toLowerCase().includes(q);}):visClients)
+              .map(c=>ce("div",{key:c.id,style:S.card},
                 ce("div",{style:S.row},
                   ce("div",{style:{display:"flex",alignItems:"center",gap:9}},
                     ce("div",{style:{width:38,height:38,borderRadius:"50%",background:C.accent+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}},c.name[0]),
@@ -877,9 +870,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                   isAdmin&&ce("button",{type:"button",style:{...S.btn("err"),width:"auto",padding:"4px 9px",fontSize:11},onClick:async()=>{await DB.del("clients",c.id);setClients(x=>x.filter(cc=>cc.id!==c.id));}},"Eliminar")
                 )
               ))
-                ) // close desktop-2col
-              ); // close IIFE return
-            })(), // close IIFE call
+            ),
             ce("button",{type:"button",style:{position:"fixed",bottom:80,right:18,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:48,height:48,fontSize:22,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 14px #c9a84c55",zIndex:99},onClick:()=>setMdl({type:"client",d:{}})},"+")),
           // FIDELIDAD
           tab==="fidelidad"&&ce("div",null,
@@ -924,8 +915,14 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                 ce("button",{type:"button",key:id,onClick:()=>setSub(id),style:{...S.btn(sub===id?"gold":"ghost"),padding:"6px 14px",fontSize:12,color:sub===id?"#000":C.muted}},lbl)
               )
             ),
-            sub==="servicios"&&ce("div",{className:"desktop-2col"},
-              svcs.map(sv=>ce("div",{key:sv.id,style:S.card},
+            sub==="servicios"&&ce("div",null,
+              ce("div",{style:{position:"relative",marginBottom:12}},
+                ce("input",{style:{...S.inp,paddingLeft:12},placeholder:"🔍 Buscar servicio...",value:svcSearch,onChange:e2=>setSvcSearch(e2.target.value),onKeyDown:e2=>{if(e2.key==="Escape")setSvcSearch("");}}),
+                svcSearch&&ce("button",{type:"button",onClick:()=>setSvcSearch(""),style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}},"×")
+              ),
+              ce("div",{className:"desktop-2col"},
+              (svcSearch.trim()?svcs.filter(sv=>sv.name.toLowerCase().includes(svcSearch.toLowerCase())):svcs)
+              .map(sv=>ce("div",{key:sv.id,style:S.card},
                 ce("div",{style:S.row},
                   ce("div",null,ce("span",{style:{fontSize:13,fontWeight:700,color:"#fff",display:"block"}},sv.name),ce("div",{style:{color:C.muted,fontSize:11}},"⏱ ",sv.dur||0," min")),
                   ce("div",{style:{textAlign:"right"}},ce("b",{style:{color:C.accent,fontSize:14}},"$",sv.price),ce("div",null,ce("span",{style:S.badge(CAT[sv.cat]||"#888")},sv.cat)))
@@ -935,7 +932,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                   ce("button",{type:"button",style:{...S.btn("err"),width:"auto",padding:"4px 9px",fontSize:11},onClick:async()=>{await DB.del("services",sv.id);setSvcs(x=>x.filter(s=>s.id!==sv.id));}},"Eliminar")
                 )
               ))
-            ),
+              ) // close desktop-2col
+            ), // close servicios div
             sub==="productos"&&ce("div",null,
               ce("div",{style:{position:"relative",marginBottom:12}},
                 ce("input",{style:{...S.inp,paddingLeft:34},placeholder:"🔍 Buscar producto...",value:prodSearch,onChange:e2=>setProdSearch(e2.target.value)}),
