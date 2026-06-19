@@ -33,13 +33,25 @@ export const MO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                    "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export const MS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 export const DY = ["Do","Lu","Ma","Mi","Ju","Vi","Sa"];
-
-// ─── SLOTS 30min 8am–9pm ────────────────────────────────────────
+// ─── SLOTS 15min 8am–9pm ────────────────────────────────────────
 export const SLOTS = [];
 for (let h = 8; h < 21; h++) {
   SLOTS.push((h < 10 ? "0" : "") + h + ":00");
+  SLOTS.push((h < 10 ? "0" : "") + h + ":15");
   SLOTS.push((h < 10 ? "0" : "") + h + ":30");
+  SLOTS.push((h < 10 ? "0" : "") + h + ":45");
 }
+
+// Helper: slots disponibles según duración del servicio
+export function slotsForDuration(dur) {
+  if (!dur || dur <= 15) return SLOTS;
+  return SLOTS.filter(sl => {
+    const [hh, mm] = sl.split(":").map(Number);
+    const mins = hh * 60 + mm - 8 * 60;
+    return mins % 15 === 0;
+  });
+}
+
 
 // ─── STAFF COLORS ────────────────────────────────────────────────
 export const STAFF_COLORS = [
