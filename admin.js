@@ -450,6 +450,76 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   }
 
 
+  function SvcSaleMdl(){
+    const [cl,setCl]=useState(""); const [ph,setPh]=useState(""); const [sv,setSv]=useState("");
+    const [mt,setMt]=useState("efectivo"); const [dp,setDp]=useState(""); const [err2,setErr2]=useState("");
+    const [clientFound2,setClientFound2]=useState(null);
+    function handlePhone(v){
+      const digits=v.replace(/\D/g,"").slice(0,10); setPh(digits);
+      if(digits.length===10){const f=clients.find(c=>c.phone===digits);setClientFound2(f||null);if(f)setCl(f.name);}
+      else setClientFound2(null);
+    }
+    const svcObj = svcs.find(s=>s.name===sv);
+    const total  = svcObj ? svcObj.price : 0;
+    async function save(){
+      setErr2("");
+      if(!cl.trim()){setErr2("Nombre del cliente obligatorio");return;}
+      if(!sv){setErr2("Selecciona un servicio");return;}
+      if(mt==="debe"&&!dp){setErr2("Selecciona fecha de pago");return;}
+      const item={id:"v"+Date.now(),client:cl.trim(),phone:ph,items:[sv],total,
+        method:mt,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
+      setSales(x=>[...x,item]); closeM();
+      try{ await DB.save("sales",item.id,item); }catch(e2){console.error(e2);}
+    }
+    return ce("div",{style:S.ov,onClick:closeM},
+      ce("div",{style:S.mb,onClick:e2=>e2.stopPropagation()},
+        ce("div",{style:{...S.row,marginBottom:14}},
+          ce("b",{style:{fontSize:15,color:C.accent}},"✂️ Registrar Venta de Servicio"),
+          ce("button",{type:"button",onClick:closeM,style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}},"✕")
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Teléfono (busca cliente automáticamente)"),
+          ce("input",{style:{...S.inp,borderColor:ph.length>0?ph.length===10?C.ok:C.err:C.border},
+            type:"tel",placeholder:"3001234567",value:ph,
+            onChange:e2=>handlePhone(e2.target.value),
+            onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+          })
+        ),
+        clientFound2&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"9px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:9}},
+          ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},clientFound2.name[0]),
+          ce("div",null,ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ "+clientFound2.name),ce("div",{style:{fontSize:11,color:C.muted}},clientFound2.visits||0," visitas"))
+        ),
+        !clientFound2&&ph.length===10&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"7px 12px",marginBottom:10,fontSize:11,color:C.warn}},"📋 Número nuevo — ingresa el nombre manualmente"),
+        ce(Field,{label:"Nombre del cliente *",val:cl,set:setCl,ph:"Carlos Pérez"}),
+        ce(Field,{label:"Servicio *",val:sv,set:setSv,opts:svcs.map(s=>({v:s.name,l:s.name+" — $"+s.price}))}),
+        sv&&ce("div",{style:{background:C.accent+"11",border:"1px solid "+C.accent+"33",borderRadius:10,padding:"10px 13px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          ce("span",{style:{fontSize:13,color:C.muted}},"Total"),
+          ce("b",{style:{fontSize:20,color:C.accent}},"$",total)
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Método de pago"),
+          ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}},
+            [["efectivo","💵 Efectivo",C.ok],["tarjeta","💳 Tarjeta",C.cyan],["transferencia","🏦 Transferencia","#3498db"],["debe","⏳ Debe",C.warn]].map(([id,lbl,col])=>
+              ce("button",{type:"button",key:id,onClick:()=>setMt(id),
+                style:{padding:"9px",borderRadius:10,border:"1.5px solid "+(mt===id?col:C.border),
+                  background:mt===id?col+"22":"transparent",color:mt===id?col:C.muted,
+                  fontSize:12,fontWeight:mt===id?700:400,cursor:"pointer"}},lbl)
+            )
+          )
+        ),
+        mt==="debe"&&ce("div",{style:{background:C.warn+"11",border:"1px solid "+C.warn+"44",borderRadius:11,padding:"11px 13px",marginBottom:10}},
+          ce("div",{style:{fontSize:12,color:C.warn,fontWeight:700,marginBottom:8}},"⏳ Pago pendiente"),
+          ce(Field,{label:"Fecha límite de pago",val:dp,set:setDp,type:"date"})
+        ),
+        err2&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},"⚠️ ",err2),
+        ce("div",{style:{display:"flex",gap:10,marginTop:4}},
+          ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:closeM},"Cancelar"),
+          ce("button",{type:"button",style:{...S.btn("gold"),flex:2,color:"#000"},onClick:save},"Guardar venta")
+        )
+      )
+    );
+  }
+
   function SaleMdl(){
     const [cl,setCl]=useState(""); const [ph,setPh]=useState(""); const [mt,setMt]=useState("efectivo");
     const [dp,setDp]=useState(""); const [selProds,setSelProds]=useState([]); const [search,setSearch]=useState("");
@@ -680,7 +750,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
 
   const visClients = isAdmin?clients:clients.filter(cl=>appts.some(a=>a.stId===user.id&&(a.client===cl.name||a.phone===cl.phone)));
   const visAppts   = isAdmin?appts:appts.filter(a=>(a.stId||a.st_id)===user.id);
-  const visSales   = isAdmin?sales:sales.filter(s=>visAppts.some(a=>a.client===s.client));
+  const visSales   = (isAdmin||user.role==="vendedor")?sales:sales.filter(s=>visAppts.some(a=>a.client===s.client));
 
   function PhotoBtn({u}){
     const ref=useRef();
