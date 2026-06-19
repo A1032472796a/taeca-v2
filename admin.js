@@ -965,9 +965,24 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         [["Servicio",adet.svc],["Fecha",adet.date],["Hora",adet.time],["Duración",(adet.dur||30)+" min"]].map(([k,v])=>
           ce("div",{key:k,style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6,paddingBottom:6,borderBottom:"1px solid "+C.border}},ce("span",{style:{color:C.muted}},k),ce("b",null,v))
         ),
-        ce("div",{style:{display:"flex",gap:8,marginTop:10}},
-          adet.status!=="confirmado"&&ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,color:"#000",fontSize:12},onClick:()=>confirmAppt(adet)},"✓ Confirmar"),
-          ce("button",{type:"button",style:{...S.btn("err"),flex:1,fontSize:12},onClick:async()=>{await DB.del("appointments",adet.id);setAppts(x=>x.filter(a=>a.id!==adet.id));setAdet(null);}},  "Eliminar")
+        ce("div",{style:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}},
+          ce("button",{type:"button",style:{...S.btn("gold"),flex:1,fontSize:11,color:"#000"},onClick:()=>setReschedMdl(adet)},"📅 Reagendar"),
+          adet.status!=="confirmado"&&ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,color:"#000",fontSize:11},onClick:()=>confirmAppt(adet)},"✓ Confirmar"),
+          (()=>{
+            let phone = adet.phone||"";
+            if(!phone){ const cli=clients.find(c=>c.name===adet.client); if(cli) phone=cli.phone||""; }
+            if(!phone) return null;
+            const staffName = users.find(u=>u.id===(adet.stId||adet.st_id))?.name||"Tu profesional";
+            const biz = (cfg?.businessName?.trim())||"Taseca";
+            const msg = "Hola "+adet.client+" 👋\n\nTe recordamos tu cita en *"+biz+"*:\n\n✂️ *Servicio:* "+adet.svc+"\n👤 *Profesional:* "+staffName+"\n📅 *Fecha:* "+adet.date+"\n⏰ *Hora:* "+adet.time+"\n\n¡Te esperamos! 💈";
+            const ph = phone.replace(/\D/g,"");
+            const waPhone = ph.length===10?"57"+ph:ph;
+            return ce("button",{type:"button",
+              style:{background:"#25D366",border:"none",borderRadius:10,padding:"9px 12px",fontSize:11,color:"#fff",fontWeight:700,cursor:"pointer",flex:1},
+              onClick:()=>window.open("https://wa.me/"+waPhone+"?text="+encodeURIComponent(msg),"_blank")
+            },"📱 WhatsApp");
+          })(),
+          ce("button",{type:"button",style:{...S.btn("err"),flex:1,fontSize:11},onClick:async()=>{await DB.del("appointments",adet.id);setAppts(x=>x.filter(a=>a.id!==adet.id));setAdet(null);}},"Eliminar")
         )
       )
     ),
