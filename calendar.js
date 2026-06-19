@@ -9,10 +9,12 @@ const ROW_H = 26;
 const MINS_PER_ROW = 15;
 
 // ─── WEEK CALENDAR ───────────────────────────────────────────────
-export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
+export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
   const [view, setView] = useState("day");
   const [cur,  setCur]  = useState(new Date());
   const [fSt,  setFSt]  = useState("all");
+  const [dragging, setDragging] = useState(null); // {appt, startY, origTime}
+  const [dragOver, setDragOver] = useState(null); // slot string being hovered
 
   const hrs = Array.from({ length: 13 }, (_, i) => i + 8); // 8..20
 
@@ -35,6 +37,42 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
     const t = hr * 60 + mn;
     return t >= pt(staffUser.wStart || "09:00") && t < pt(staffUser.wEnd || "19:00");
   }
+  // ─── DRAG HELPERS ───
+  function slotFromMins(totalMins) {
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    if (h < 8 || h >= 21) return null;
+    const snap = Math.round(m / 15) * 15;
+    const hFinal = snap === 60 ? h + 1 : h;
+    const mFinal = snap === 60 ? 0 : snap;
+    if (hFinal >= 21) return null;
+    return (hFinal < 10 ? "0" : "") + hFinal + ":" + String(mFinal).padStart(2, "0");
+  }
+
+  function handleDragStart(e, a) {
+    e.stopPropagation();
+    setDragging({ appt: a, origTime: a.time });
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("apptId", a.id);
+  }
+
+  function handleDragOver(e, slot) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(slot);
+  }
+
+  function handleDrop(e, hr, mn, su) {
+    e.preventDefault();
+    if (!dragging || !su) return;
+    const newSlot = (hr < 10 ? "0" : "") + hr + ":" + String(mn).padStart(2, "0");
+    if (newSlot !== dragging.origTime) {
+      onReschedule && onReschedule(dragging.appt, ts(cur), newSlot);
+    }
+    setDragging(null);
+    setDragOver(null);
+  }
+
   function prev() { const d = new Date(cur); d.setDate(d.getDate() - (view==="week"?7:1)); setCur(d); }
   function next() { const d = new Date(cur); d.setDate(d.getDate() + (view==="week"?7:1)); setCur(d); }
 
@@ -99,25 +137,40 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
                            (hr*60+mn) >= pt(su.lunchStart) && (hr*60+mn) < pt(su.lunchEnd));
         const isToday = ts(cur) === today();
         const slotAppts = getStaffAppts(su.id, ts(cur), hr, mn);
+        const slotStr = (hr<10?"0":"")+hr+":"+String(mn).padStart(2,"0");
+        const isDragTarget = dragging && dragOver === su.id+"_"+slotStr && iw && !ib;
         return ce("div", { key:su.id,
-          onClick: () => { if (slotAppts.length > 0) onAppt(slotAppts[0]); else if (iw && !ib && !isLunch) onSlot(cur, hr, mn, su.id); },
+          onClick: () => { if (!dragging && slotAppts.length > 0) onAppt(slotAppts[0]); else if (!dragging && iw && !ib && !isLunch) onSlot(cur, hr, mn, su.id); },
+          onDragOver: e => iw && !ib ? handleDragOver(e, su.id+"_"+slotStr) : null,
+          onDragLeave: () => setDragOver(null),
+          onDrop: e => handleDrop(e, hr, mn, su),
           style:{ flex:1, minWidth:120, borderLeft:"2px solid "+sc+"66", position:"relative",
-                  background: !iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
-                  cursor: iw && !ib ? "pointer" : "default", overflow:"visible" } },
+                  background: isDragTarget ? sc+"22" : !iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
+                  cursor: dragging ? "copy" : iw && !ib ? "pointer" : "default",
+                  overflow:"visible",
+                  outline: isDragTarget ? "2px dashed "+sc : "none" } },
           ce("div", { style:{ position:"absolute", left:0, top:0, bottom:0, width:2, background:sc+"44" } }),
           slotAppts.map((a, ai) => {
             const aCol = SC[a.status] || sc;
             const aDur = a.dur || 30;
             const aHeight = Math.max(ROW_H - 4, Math.round((aDur / MINS_PER_ROW) * ROW_H) - 4);
-            return ce("div", { key:a.id, style:{
-              position:"absolute",
-              top: 2, left: ai===0?5:(5+ai*4), right:2,
-              height: aHeight + "px",
-              background:aCol+"22", border:"1.5px solid "+aCol, borderRadius:5,
-              padding:"3px 6px", overflow:"hidden", zIndex:10+ai,
-              boxShadow:"0 2px 8px "+aCol+"44",
-              pointerEvents:"auto"
-            }},
+            return ce("div", { key:a.id,
+              draggable: true,
+              onDragStart: e => handleDragStart(e, a),
+              onDragEnd: () => { setDragging(null); setDragOver(null); },
+              onClick: e => { e.stopPropagation(); onAppt(a); },
+              style:{
+                position:"absolute",
+                top: 2, left: ai===0?5:(5+ai*4), right:2,
+                height: aHeight + "px",
+                background: dragging?.appt?.id===a.id ? aCol+"44" : aCol+"22",
+                border:"1.5px solid "+aCol, borderRadius:5,
+                padding:"3px 6px", overflow:"hidden", zIndex:10+ai,
+                boxShadow:"0 2px 8px "+aCol+"44",
+                cursor:"grab", pointerEvents:"auto",
+                opacity: dragging?.appt?.id===a.id ? 0.6 : 1,
+                transition:"opacity .15s"
+              }},
               ce("div", { style:{ fontSize:11, fontWeight:700, color:aCol, overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" } }, a.client),
               ce("div", { style:{ fontSize:10, color:C.muted, marginTop:1, overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" } }, a.svc),
               ce("div", { style:{ display:"flex", gap:4, marginTop:2, flexWrap:"wrap" } },
