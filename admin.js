@@ -1,4 +1,4 @@
-import { C, S, ROLES, RTABS, SC, SL, CAT, DY, SLOTS, MO } from "./config.js";
+import { C, S, ROLES, RTABS, SC, SL, CAT, DY, SLOTS, MO, slotsForDuration } from "./config.js";
 import { DB } from "./db.js";
 import { ts, today, vPhone, pt, scheduleReminder } from "./helpers.js";
 import { Logo, Field, Mdl, Toggle, PhoneInput, StampCard, PtsBar, TrialBanner, NotifBanner } from "./components.js";
