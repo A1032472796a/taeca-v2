@@ -35,6 +35,7 @@ export function toDb(c, o) {
   if (c === "appointments") {
     if (d.stId !== undefined) { d.st_id = d.stId; delete d.stId; }
     delete d.svcId; delete d.isBlock; delete d.endTime; delete d.note;
+    delete d.email; // no existe como columna en Supabase
   }
   if (c === "sales" || c === "product_sales") {
     if (d.dueDate  !== undefined) { d.due_date  = d.dueDate;  delete d.dueDate;  }
