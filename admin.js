@@ -1167,7 +1167,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           ce("div",{key:k,style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6,paddingBottom:6,borderBottom:"1px solid "+C.border}},ce("span",{style:{color:C.muted}},k),ce("b",null,v))
         ),
         ce("div",{style:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}},
-          ce("button",{type:"button",style:{...S.btn("gold"),flex:1,fontSize:11,color:"#000"},onClick:()=>setReschedMdl(adet)},"📅 Reagendar"),
+          ce("button",{type:"button",style:{...S.btn("gold"),flex:1,fontSize:11,color:"#000"},onClick:()=>{setReschedMdl(adet);setAdet(null);}},"📅 Reagendar"),
           adet.status!=="confirmado"&&ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,color:"#000",fontSize:11},onClick:()=>confirmAppt(adet)},"✓ Confirmar"),
           (()=>{
             let phone = adet.phone||"";
