@@ -951,12 +951,24 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                       ce("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},ce("b",{style:{color:isDebt?C.warn:C.accent,fontSize:13}},"$",isDebt?pend2:s.total),ce("div",null,ce("span",{style:S.badge(isDebt?C.warn:C.ok)},isDebt?"⏳ Debe":s.method)))
                     ),
                     ce("div",{style:{marginTop:5,fontSize:10,color:C.muted}},"📆 ",s.date),
-                    isDebt&&isAdmin&&ce("div",{style:{display:"flex",gap:6,marginTop:7}},
+                    (isDebt&&(isAdmin||user.role==="vendedor"))&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
                       ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"7px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn},onClick:()=>setAbonoMdl({...s,_table:"product_sales"})},"💵 Abonar"),
                       ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"7px",fontSize:11,color:"#000"},onClick:()=>{
                         const upd={...s,method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0};
                         setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));DB.save("product_sales",upd.id,upd).catch(()=>{});
-                      }},"✅ Pago total")
+                      }},"✅ Pago total"),
+                      s.phone&&(()=>{
+                        const phone=s.phone.replace(/\D/g,"");
+                        const waPhone=phone.length===10?"57"+phone:phone;
+                        const abonos2=s.abonos||[];
+                        const totalAb=abonos2.reduce((a,ab)=>a+ab.monto,0);
+                        const pend3=s.pendiente!==undefined?s.pendiente:s.total-totalAb;
+                        const msg="Hola "+s.client+" 👋\n\nTe recordamos que tienes un saldo pendiente:\n\n📦 *Productos:* "+(s.items||[]).join(", ")+"\n💰 *Total:* $"+s.total+(totalAb>0?"\n✅ *Abonado:* $"+totalAb:"")+(pend3>0?"\n⏳ *Pendiente:* $"+pend3:"")+(s.dueDate?"\n📅 *Fecha límite:* "+s.dueDate:"")+"\n\n¡Gracias! 🙏";
+                        return ce("button",{type:"button",
+                          style:{background:"#25D366",border:"none",borderRadius:10,padding:"7px 10px",fontSize:11,color:"#fff",fontWeight:700,cursor:"pointer",flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5},
+                          onClick:()=>window.open("https://wa.me/"+waPhone+"?text="+encodeURIComponent(msg),"_blank")
+                        },"📱 WA");
+                      })()
                     )
                   );
                 })
