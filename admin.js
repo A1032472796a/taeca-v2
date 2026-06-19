@@ -225,7 +225,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [notifs,   setNotifs]   = useState([]);
   const [showN,    setShowN]    = useState(false);
   const staffL = users.filter(u=>u.role==="barbero"||u.role==="tatuador");
-  const initSt = isAdmin ? (staffL[0]?.id||null) : user.id;
+  const initSt = isAdmin ? null : user.id; // Admin: Todos por defecto
   const [selSt, setSelSt] = useState(initSt);
 
   // ── Notify check ──
