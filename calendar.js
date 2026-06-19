@@ -82,7 +82,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
     const slotKey = hr + "-" + mn;
     const isHour  = mn === 0;
     return ce("div", { key:slotKey, style:{ display:"flex", borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),
-                                             minHeight:26, background: isHour?"transparent":"#ffffff04" } },
+                                             minHeight:26, background: isHour?"transparent":"#ffffff04", position:"relative" } },
       ce("div", { style:{ width:36, flexShrink:0, display:"flex", alignItems:"flex-start",
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
@@ -103,7 +103,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
           onClick: () => { if (slotAppts.length > 0) onAppt(slotAppts[0]); else if (iw && !ib && !isLunch) onSlot(cur, hr, mn, su.id); },
           style:{ flex:1, minWidth:120, borderLeft:"2px solid "+sc+"66", position:"relative",
                   background: !iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
-                  cursor: iw && !ib ? "pointer" : "default" } },
+                  cursor: iw && !ib ? "pointer" : "default", overflow:"visible" } },
           ce("div", { style:{ position:"absolute", left:0, top:0, bottom:0, width:2, background:sc+"44" } }),
           slotAppts.map((a, ai) => {
             const aCol = SC[a.status] || sc;
@@ -114,7 +114,9 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
               top: 2, left: ai===0?5:(5+ai*4), right:2,
               height: aHeight + "px",
               background:aCol+"22", border:"1.5px solid "+aCol, borderRadius:5,
-              padding:"3px 6px", overflow:"hidden", zIndex:2+ai, boxShadow:"0 1px 4px "+aCol+"33"
+              padding:"3px 6px", overflow:"hidden", zIndex:10+ai,
+              boxShadow:"0 2px 8px "+aCol+"44",
+              pointerEvents:"auto"
             }},
               ce("div", { style:{ fontSize:11, fontWeight:700, color:aCol, overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" } }, a.client),
               ce("div", { style:{ fontSize:10, color:C.muted, marginTop:1, overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" } }, a.svc),
@@ -144,7 +146,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
     const isHour  = mn === 0;
     const slot    = (hr<10?"0":"")+hr+":"+String(mn).padStart(2,"0");
     return ce("div", { key:slotKey, style:{ display:"flex", borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),
-                                             minHeight:26, background: isHour?"transparent":"#ffffff04" } },
+                                             minHeight:26, background: isHour?"transparent":"#ffffff04", position:"relative" } },
       ce("div", { style:{ width:36, flexShrink:0, display:"flex", alignItems:"flex-start",
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
@@ -210,8 +212,8 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
       )
     ),
     // ── Grid ──
-    ce("div", { style:{ overflowX:"auto", overflowY:"auto", maxHeight:"calc(100vh - 330px)" } },
-      ce("div", { style:{ minWidth:gridMinW } },
+    ce("div", { style:{ overflowX:"auto", overflowY:"auto", maxHeight:"calc(100vh - 330px)", position:"relative" } },
+      ce("div", { style:{ minWidth:gridMinW, position:"relative" } },
         // Column headers
         view === "day" && cols.length > 0 && ce("div", { style:{ display:"flex", borderBottom:"1px solid "+C.border, position:"sticky", top:0, background:C.bg, zIndex:5 } },
           ce("div", { style:{ width:36, flexShrink:0 } }),
