@@ -4,6 +4,10 @@ import { DB } from "./db.js";
 
 const { createElement: ce, useState } = React;
 
+// Altura de cada slot de 15min en píxeles
+const ROW_H = 26;
+const MINS_PER_ROW = 15;
+
 // ─── WEEK CALENDAR ───────────────────────────────────────────────
 export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
   const [view, setView] = useState("day");
@@ -103,8 +107,12 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
           ce("div", { style:{ position:"absolute", left:0, top:0, bottom:0, width:2, background:sc+"44" } }),
           slotAppts.map((a, ai) => {
             const aCol = SC[a.status] || sc;
+            const aDur = a.dur || 30;
+            const aHeight = Math.max(ROW_H - 4, Math.round((aDur / MINS_PER_ROW) * ROW_H) - 4);
             return ce("div", { key:a.id, style:{
-              position:"absolute", inset: ai===0?"2px 2px 2px 5px":"2px 2px 2px "+(5+ai*4)+"px",
+              position:"absolute",
+              top: 2, left: ai===0?5:(5+ai*4), right:2,
+              height: aHeight + "px",
               background:aCol+"22", border:"1.5px solid "+aCol, borderRadius:5,
               padding:"3px 6px", overflow:"hidden", zIndex:2+ai, boxShadow:"0 1px 4px "+aCol+"33"
             }},
