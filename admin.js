@@ -448,6 +448,97 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     );
   }
 
+
+  function SaleMdl(){
+    const [cl,setCl]=useState(""); const [ph,setPh]=useState(""); const [mt,setMt]=useState("efectivo");
+    const [dp,setDp]=useState(""); const [selProds,setSelProds]=useState([]); const [search,setSearch]=useState("");
+    const [showList,setShowList]=useState(false); const [err2,setErr2]=useState(""); const [clientFound2,setClientFound2]=useState(null);
+    const total=selProds.reduce((a,x)=>a+x.price*x.qty,0);
+    const filteredProds=prods.filter(pr=>!search||pr.name.toLowerCase().includes(search.toLowerCase()));
+    function handlePhone(v){
+      const digits=v.replace(/\D/g,"").slice(0,10); setPh(digits);
+      if(digits.length===10){const f=clients.find(c=>c.phone===digits);setClientFound2(f||null);if(f)setCl(f.name);}
+      else setClientFound2(null);
+    }
+    function addProd(pr){
+      const stock=pr.stock!==undefined?pr.stock:999;
+      if(stock<=0){setErr2("Sin stock: "+pr.name);return;}
+      setSelProds(prev=>{
+        const ex=prev.find(x=>x.id===pr.id);
+        if(ex){if(ex.qty>=stock){setErr2("Stock insuficiente: "+stock);return prev;}return prev.map(x=>x.id===pr.id?{...x,qty:x.qty+1}:x);}
+        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1,stock}];
+      });
+      setSearch(""); setShowList(false);
+    }
+    function changeQty(id,delta){setSelProds(prev=>prev.map(x=>x.id!==id?x:x.qty+delta<=0?null:{...x,qty:x.qty+delta}).filter(Boolean));}
+    async function save(){
+      setErr2("");
+      if(!cl.trim()){setErr2("Nombre del cliente obligatorio");return;}
+      if(selProds.length===0){setErr2("Agrega al menos un producto");return;}
+      if(mt==="debe"&&!dp){setErr2("Selecciona fecha de pago");return;}
+      const item={id:"v"+Date.now(),client:cl.trim(),phone:ph,
+        items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
+        total,method:mt,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
+      setProdSales(x=>[...x,item]); closeM();
+      try{
+        await DB.save("product_sales",item.id,item);
+        const soldIds={}; selProds.forEach(sp=>{soldIds[sp.id]=sp.qty;});
+        setProds(prods.map(pr=>{if(!soldIds[pr.id])return pr;const upd={...pr,stock:Math.max(0,(pr.stock||0)-soldIds[pr.id])};DB.save("products",pr.id,upd).catch(()=>{});return upd;}));
+      }catch(e2){console.error(e2);}
+    }
+    return ce("div",{style:S.ov,onClick:closeM},
+      ce("div",{style:S.mb,onClick:e2=>e2.stopPropagation()},
+        ce("div",{style:{...S.row,marginBottom:14}},ce("b",{style:{fontSize:15,color:C.accent}},"💰 Nueva Venta"),ce("button",{type:"button",onClick:closeM,style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}},"✕")),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Telefono"),
+          ce("input",{style:S.inp,type:"tel",placeholder:"3001234567",value:ph,onChange:e2=>handlePhone(e2.target.value),onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}})
+        ),
+        clientFound2&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"9px 12px",marginBottom:10}},ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ ",clientFound2.name)),
+        ce(Field,{label:"Nombre del cliente",val:cl,set:setCl,ph:"Carlos Perez"}),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Productos"),
+          ce("div",{style:{position:"relative"}},
+            ce("input",{style:S.inp,placeholder:"Buscar producto...",value:search,onChange:e2=>{setSearch(e2.target.value);setShowList(true);},onFocus:()=>setShowList(true),onBlur:()=>setTimeout(()=>setShowList(false),200)}),
+            showList&&ce("div",{style:{background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,marginTop:4,maxHeight:200,overflowY:"auto",position:"relative",zIndex:50}},
+              filteredProds.length===0&&ce("div",{style:{padding:12,textAlign:"center",color:C.muted,fontSize:12}},"Sin productos"),
+              filteredProds.map(pr=>ce("div",{key:pr.id,onMouseDown:()=>addProd(pr),style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",display:"flex",justifyContent:"space-between"}},
+                ce("span",{style:{fontSize:13}},pr.name),ce("b",{style:{color:C.accent}},"$",pr.price)
+              ))
+            )
+          ),
+          selProds.length>0&&ce("div",{style:{background:"#0d1520",border:"1px solid "+C.border,borderRadius:11,padding:8,marginTop:8}},
+            selProds.map(x=>ce("div",{key:x.id,style:{display:"flex",alignItems:"center",gap:7,marginBottom:5,background:C.card,borderRadius:8,padding:"6px 9px"}},
+              ce("div",{style:{flex:1}},ce("span",{style:{fontSize:12,fontWeight:700}},x.name),ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price)),
+              ce("div",{style:{display:"flex",alignItems:"center",gap:3}},
+                ce("button",{type:"button",onClick:()=>changeQty(x.id,-1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"−"),
+                ce("span",{style:{fontSize:12,fontWeight:700,minWidth:16,textAlign:"center"}},x.qty),
+                ce("button",{type:"button",onClick:()=>changeQty(x.id,1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"+")
+              ),
+              ce("b",{style:{color:C.accent,fontSize:12,minWidth:44,textAlign:"right"}},"$",x.price*x.qty),
+              ce("button",{type:"button",onClick:()=>setSelProds(p=>p.filter(s=>s.id!==x.id)),style:{background:"none",border:"none",color:C.err,cursor:"pointer"}},"✕")
+            )),
+            ce("div",{style:{display:"flex",justifyContent:"space-between",borderTop:"1px solid "+C.border,paddingTop:7,marginTop:3}},
+              ce("b",{style:{fontSize:13,color:C.muted}},"Total"),ce("b",{style:{fontSize:18,color:C.accent}},"$",total))
+          )
+        ),
+        ce("div",{style:{marginBottom:10}},
+          ce("label",{style:S.lbl},"Metodo de pago"),
+          ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}},
+            [["efectivo","💵 Efectivo",C.ok],["tarjeta","💳 Tarjeta",C.cyan],["transferencia","🏦 Transferencia","#3498db"],["debe","⏳ Debe",C.warn]].map(([id,lbl,col])=>
+              ce("button",{type:"button",key:id,onClick:()=>setMt(id),style:{padding:9,borderRadius:10,border:"1.5px solid "+(mt===id?col:C.border),background:mt===id?col+"22":"transparent",color:mt===id?col:C.muted,fontSize:12,fontWeight:mt===id?700:400,cursor:"pointer"}},lbl)
+            )
+          )
+        ),
+        mt==="debe"&&ce(Field,{label:"Fecha limite de pago",val:dp,set:setDp,type:"date"}),
+        err2&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},"⚠️ ",err2),
+        ce("div",{style:{display:"flex",gap:10,marginTop:4}},
+          ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:closeM},"Cancelar"),
+          ce("button",{type:"button",style:{...S.btn("gold"),flex:2,color:"#000"},onClick:save},"Guardar venta")
+        )
+      )
+    );
+  }
+
   async function confirmAppt(a){
     const upd={...a,status:"confirmado"};
     setAppts(x=>x.map(aa=>aa.id===upd.id?upd:aa)); setAdet(null);
@@ -733,7 +824,9 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     mdl?.type==="svc"    && ce(SvcMdl,null),
     mdl?.type==="prod"   && ce(ProdMdl,null),
     mdl?.type==="client" && ce(CliMdl,null),
+    mdl?.type==="user"   && ce(UserMdl,null),
     (mdl?.type==="appt"||mdl?.type==="walkin"||nslot) && ce(ApptMdl,null),
+    mdl?.type==="sale"   && ce(SaleMdl,null),
     abonoMdl && ce(AbonoMdl,null),
     // Appt detail
     adet && ce("div",{style:S.ov,onClick:()=>setAdet(null)},
