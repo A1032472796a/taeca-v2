@@ -289,7 +289,6 @@ export function App() {
   }, []); // solo una vez
 
   // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
-  useEffect(() => {  // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
   useEffect(() => {
     async function refresh() {
       if (!window._companyId && window._companySlug) return; // aún no inicializado
