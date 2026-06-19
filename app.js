@@ -239,9 +239,11 @@ export function App() {
         + '<div style="color:#aaa;font-size:11px;margin-top:2px">✂️ ' + (a.svc||"") + ' · 👨 ' + staffName + '</div>'
         + '<div style="color:#4ecdc4;font-size:11px;font-weight:700;margin-top:3px">📆 ' + a.date + ' · ' + a.time + '</div>'
         + '</div>'
-        + '<button onclick="this.closest(\'div[style]\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>'
+        + '<button id="taseca-notif-close" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>'
         + '</div>';
       document.body.appendChild(div);
+      var closeBtn = div.querySelector("#taseca-notif-close");
+      if (closeBtn) closeBtn.onclick = function(){ try{ div.remove(); }catch{} };
       setTimeout(() => { try { div.remove(); } catch {} }, 9000);
 
       // 3. Sonido
