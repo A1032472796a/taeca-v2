@@ -686,8 +686,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       const [h,m] = time2.split(":").map(Number);
       let total = h*60 + m + mins;
       total = Math.max(8*60, Math.min(20*60, total));
-      // snap a múltiplo de 15
-      total = Math.round(total/15)*15;
+      // NO snap — respetar exactamente los minutos indicados
       const nh = Math.floor(total/60);
       const nm = total%60;
       setTime2((nh<10?"0":"")+nh+":"+String(nm).padStart(2,"0"));
