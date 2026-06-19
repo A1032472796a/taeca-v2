@@ -1,4 +1,4 @@
-import { C, S, ROLES, SC, SL, SLOTS, STAFF_COLORS, DY, MO } from "./config.js";
+import { C, S, ROLES, SC, SL, SLOTS, STAFF_COLORS, DY, MO, slotsForDuration } from "./config.js";
 import { pt, ts, today, calDays, weekOf } from "./helpers.js";
 import { DB } from "./db.js";
 
@@ -22,7 +22,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
   const wa    = fSt === "all" ? waAll : waAll.filter(a => a.status === fSt);
 
   function getStaffAppts(uid, ds, hr, mn) {
-    const slot = (hr < 10 ? "0" : "") + hr + ":" + (mn === 0 ? "00" : "30");
+    const slot = (hr < 10 ? "0" : "") + hr + ":" + String(mn).padStart(2, "0");
     return wa.filter(a => (a.stId || a.st_id) === uid && a.date === ds && a.time === slot);
   }
   function isWork(staffUser, date, hr, mn) {
@@ -78,7 +78,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
     const slotKey = hr + "-" + mn;
     const isHour  = mn === 0;
     return ce("div", { key:slotKey, style:{ display:"flex", borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),
-                                             minHeight:52, background: isHour?"transparent":"#ffffff04" } },
+                                             minHeight:26, background: isHour?"transparent":"#ffffff04" } },
       ce("div", { style:{ width:36, flexShrink:0, display:"flex", alignItems:"flex-start",
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
@@ -134,13 +134,13 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
   function renderWeekSlot(hr, mn) {
     const slotKey = hr + "-" + mn;
     const isHour  = mn === 0;
-    const slot    = (hr<10?"0":"")+hr+":"+(mn===0?"00":"30");
+    const slot    = (hr<10?"0":"")+hr+":"+String(mn).padStart(2,"0");
     return ce("div", { key:slotKey, style:{ display:"flex", borderBottom:"1px solid "+(isHour?C.border+"bb":C.border+"33"),
-                                             minHeight:28, background: isHour?"transparent":"#ffffff04" } },
+                                             minHeight:26, background: isHour?"transparent":"#ffffff04" } },
       ce("div", { style:{ width:36, flexShrink:0, display:"flex", alignItems:"flex-start",
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
-        isHour && ce("span", { style:{ fontSize:8, color:C.muted, fontWeight:700 } }, hr+":00")
+        (mn===0)?ce("span",{style:{fontSize:8,color:C.muted,fontWeight:700}},hr+":00"):(mn===30)?ce("span",{style:{fontSize:7,color:C.border}},":30"):ce("span",{style:{fontSize:6,color:C.border+"44"}},":"+String(mn).padStart(2,"0"))
       ),
       wk.map((d, di) => {
         const ds          = ts(d);
@@ -237,7 +237,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt }) {
           })
         ),
         // Slot rows
-        hrs.flatMap(hr => [0,30].map(mn =>
+        hrs.flatMap(hr => [0,15,30,45].map(mn =>
           view === "day" ? renderDaySlot(hr, mn) : renderWeekSlot(hr, mn)
         ))
       )
