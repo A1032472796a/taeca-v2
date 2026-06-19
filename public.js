@@ -1,4 +1,4 @@
-import { C, S, ROLES, SC, SL, SLOTS, MO, DY } from "./config.js";
+import { C, S, ROLES, SC, SL, SLOTS, MO, DY, slotsForDuration } from "./config.js";
 import { pt, ts, today, vPhone, calDays, weekOf, scheduleReminder } from "./helpers.js";
 import { DB } from "./db.js";
 import { Logo, Field, PhoneInput, StampCard, PtsBar } from "./components.js";
@@ -40,7 +40,16 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     if (sm < pt(stf.wStart||"09:00") || sm >= pt(stf.wEnd||"19:00")) return false;
     if (stf.blocks?.[ds] === true) return false;
     if (stf.lunchStart && stf.lunchEnd && sm >= pt(stf.lunchStart) && sm < pt(stf.lunchEnd)) return false;
-    return !appts.some(a => a.stId === stf.id && a.date === ds && a.time === sl);
+    // Check that no appointment overlaps within the service duration
+    const slMins = pt(sl);
+    const dur2 = svc ? svc.dur : 30;
+    return !appts.some(a => {
+      if (a.stId !== stf.id || a.date !== ds) return false;
+      const aMins = pt(a.time);
+      const aDur = a.dur || 30;
+      // overlap if slots intersect
+      return slMins < aMins + aDur && slMins + dur2 > aMins;
+    });
   }
   function dayOk(d) {
     if (!stf) return false;
@@ -51,7 +60,11 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     return SLOTS.some(sl => slotOk(d, sl));
   }
   const avSlots = { m: [], a: [] };
-  if (stf && dt) SLOTS.forEach(sl => { if (slotOk(dt,sl)) { if (pt(sl)<13*60) avSlots.m.push(sl); else avSlots.a.push(sl); } });
+  if (stf && dt) {
+    const dur = svc ? svc.dur : 30;
+    const validSlots = slotsForDuration(dur);
+    validSlots.forEach(sl => { if (slotOk(dt,sl)) { if (pt(sl)<13*60) avSlots.m.push(sl); else avSlots.a.push(sl); } });
+  }
 
   async function confirm() {
     if (!nm) { setErr("Ingresa tu nombre"); return; }
