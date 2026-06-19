@@ -13,13 +13,40 @@ import { Admin  } from "./admin.js";
 const { createElement: ce, useState, useEffect, useCallback } = React;
 
 // ─── LOGIN ───────────────────────────────────────────────────────
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS   = 60 * 1000; // 1 minuto
+
 function Login({ users, onLogin, onBack }) {
-  const [sel, setSel] = useState(null);
-  const [pin, setPin] = useState("");
-  const [err, setErr] = useState("");
+  const [sel,        setSel]        = useState(null);
+  const [pin,        setPin]        = useState("");
+  const [err,        setErr]        = useState("");
+  const [attempts,   setAttempts]   = useState(0);
+  const [lockedUntil,setLockedUntil]= useState(null);
+  const [countdown,  setCountdown]  = useState(0);
+
+  // Cuenta regresiva mientras está bloqueado
+  React.useEffect(() => {
+    if (!lockedUntil) return;
+    const iv = setInterval(() => {
+      const left = Math.ceil((lockedUntil - Date.now()) / 1000);
+      if (left <= 0) {
+        setLockedUntil(null);
+        setAttempts(0);
+        setCountdown(0);
+        setErr("");
+        clearInterval(iv);
+      } else {
+        setCountdown(left);
+        setErr("🔒 Bloqueado por " + left + " segundo" + (left === 1 ? "" : "s"));
+      }
+    }, 500);
+    return () => clearInterval(iv);
+  }, [lockedUntil]);
+
+  const isLocked = lockedUntil && Date.now() < lockedUntil;
 
   async function tap(d) {
-    if (pin.length >= 4) return;
+    if (isLocked || pin.length >= 4) return;
     const np = pin + d;
     setPin(np);
     if (np.length === 4) {
@@ -27,8 +54,22 @@ function Login({ users, onLogin, onBack }) {
         const enc = new TextEncoder();
         const buf = await crypto.subtle.digest("SHA-256", enc.encode(np));
         const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
-        if (hex === sel.pin || np === sel.pin) onLogin(sel);
-        else { setErr("PIN incorrecto"); setPin(""); }
+        if (hex === sel.pin || np === sel.pin) {
+          setAttempts(0);
+          onLogin(sel);
+        } else {
+          const newAttempts = attempts + 1;
+          setAttempts(newAttempts);
+          setPin("");
+          if (newAttempts >= MAX_ATTEMPTS) {
+            const until = Date.now() + LOCKOUT_MS;
+            setLockedUntil(until);
+            setErr("🔒 Demasiados intentos. Bloqueado por 60 segundos.");
+          } else {
+            const left = MAX_ATTEMPTS - newAttempts;
+            setErr("PIN incorrecto — " + left + " intento" + (left === 1 ? "" : "s") + " restante" + (left === 1 ? "" : "s"));
+          }
+        }
       }, 200);
     }
   }
@@ -66,19 +107,20 @@ function Login({ users, onLogin, onBack }) {
             ce("div", { style:{ color:C.muted, fontSize:11, marginTop:9 } }, "Ingresa tu PIN")
           ),
           ce("div", { style:{ display:"flex", gap:11, justifyContent:"center", marginBottom:20 } },
-            [0,1,2,3].map(i => ce("div", { key:i, style:{ width:13, height:13, borderRadius:"50%", background: i<pin.length?C.accent:C.border } }))
+            [0,1,2,3].map(i => ce("div", { key:i, style:{ width:13, height:13, borderRadius:"50%", background: isLocked?C.err:i<pin.length?C.accent:C.border } }))
           ),
           err && ce("div", { style:{ color:C.err, fontSize:12, textAlign:"center", marginBottom:9 } }, err),
           ce("div", { style:{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:7, maxWidth:240, margin:"0 auto" } },
             [1,2,3,4,5,6,7,8,9].map(n =>
-              ce("button", { type:"button", key:n, onClick:()=>tap(String(n)),
+              ce("button", { type:"button", key:n, onClick:()=>tap(String(n)), disabled:!!isLocked,
                 style:{ background:C.card, border:"1px solid "+C.border, borderRadius:11, padding:"14px",
-                        fontSize:19, fontWeight:700, color:C.text, cursor:"pointer", textAlign:"center" } }, n)
+                        fontSize:19, fontWeight:700, color: isLocked?C.border:C.text,
+                        cursor: isLocked?"not-allowed":"pointer", textAlign:"center", opacity: isLocked?0.4:1 } }, n)
             ),
             ce("button", { type:"button", onClick:()=>{ setSel(null); setPin(""); setErr(""); },
               style:{ background:"transparent", border:"none", fontSize:12, color:C.muted, cursor:"pointer", padding:"14px", textAlign:"center" } }, "←"),
-            ce("button", { type:"button", onClick:()=>tap("0"),
-              style:{ background:C.card, border:"1px solid "+C.border, borderRadius:11, padding:"14px", fontSize:19, fontWeight:700, color:C.text, cursor:"pointer", textAlign:"center" } }, "0"),
+            ce("button", { type:"button", onClick:()=>tap("0"), disabled:!!isLocked,
+              style:{ background:C.card, border:"1px solid "+C.border, borderRadius:11, padding:"14px", fontSize:19, fontWeight:700, color: isLocked?C.border:C.text, cursor: isLocked?"not-allowed":"pointer", textAlign:"center", opacity: isLocked?0.4:1 } }, "0"),
             ce("button", { type:"button", onClick:()=>setPin(p=>p.slice(0,-1)),
               style:{ background:"transparent", border:"none", fontSize:17, color:C.muted, cursor:"pointer", padding:"14px", textAlign:"center" } }, "⌫")
           )
