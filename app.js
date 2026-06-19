@@ -212,6 +212,36 @@ export function App() {
     boot();
   }, [init]);
 
+  // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
+  useEffect(() => {
+    async function refresh() {
+      if (!window._companyId && window._companySlug) return; // aún no inicializado
+      try {
+        // Limpiar cache para forzar datos frescos
+        ["appointments","clients","sales","product_sales"].forEach(t => {
+          const key = "taseca_cache_" + t + "_" + (window._companyId || "root");
+          try { localStorage.removeItem(key); } catch {}
+        });
+        const [newAppts, newClients, newSales, newProdSales] = await Promise.all([
+          DB.all("appointments"),
+          DB.all("clients"),
+          DB.all("sales"),
+          DB.all("product_sales")
+        ]);
+        setAppts(newAppts);
+        setClients(newClients);
+        setSales(newSales);
+        setProdSales(newProdSales);
+        console.log("[Taseca] Auto-refresh ✓", new Date().toLocaleTimeString("es"));
+      } catch(e) {
+        console.warn("[Taseca] Auto-refresh error:", e.message);
+      }
+    }
+    const INTERVAL = 5 * 60 * 1000; // 5 minutos
+    const iv = setInterval(refresh, INTERVAL);
+    return () => clearInterval(iv);
+  }, []); // solo una vez al montar
+
   const sharedProps = { users, setUsers, svcs, setSvcs, prods, setProds, clients, setClients,
                          appts, setAppts, sales, setSales, prodSales, setProdSales, cfg, setCfg };
 
