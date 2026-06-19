@@ -83,6 +83,7 @@ export function fromDb(c, o) {
 // ─── CACHE (localStorage + memory, TTL 5min) ─────────────────────
 const CACHE_TTL = 5 * 60 * 1000;
 const _mem = {};
+window._memCache = _mem; // expuesto para limpiar cache externamente
 
 function cacheGet(key) {
   if (_mem[key] && (Date.now() - _mem[key].t) < CACHE_TTL) return _mem[key].v;
