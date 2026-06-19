@@ -34,8 +34,9 @@ export function toDb(c, o) {
   }
   if (c === "appointments") {
     if (d.stId !== undefined) { d.st_id = d.stId; delete d.stId; }
+    // Eliminar campos que no existen como columnas en Supabase
     delete d.svcId; delete d.isBlock; delete d.endTime; delete d.note;
-    delete d.email; // no existe como columna en Supabase
+    delete d.email; delete d.svcPrice; delete d.clientFound;
   }
   if (c === "sales" || c === "product_sales") {
     if (d.dueDate  !== undefined) { d.due_date  = d.dueDate;  delete d.dueDate;  }
@@ -128,12 +129,17 @@ export const DB = {
     cacheClear(c + "_" + (window._companyId || "root"));
     if (SB.co(c) && window._companyId) p.company_id = window._companyId;
     Object.keys(p).forEach(k => { if (p[k] === undefined) delete p[k]; });
+    if (c === "appointments") console.log("[DB.save appointments] payload:", JSON.stringify(p));
     const r = await fetch(window.SB_URL + "/rest/v1/" + c, {
       method: "POST",
       headers: { ...SB.h(), "Prefer": "resolution=merge-duplicates,return=representation" },
       body: JSON.stringify(p)
     });
-    if (!r.ok) throw new Error("DB.save " + c + ": " + r.status + " " + await r.text());
+    if (!r.ok) {
+      const errText = await r.text();
+      console.error("[DB.save "+c+" ERROR]", r.status, errText);
+      throw new Error("DB.save " + c + ": " + r.status + " " + errText);
+    }
     return r.json();
   },
 
