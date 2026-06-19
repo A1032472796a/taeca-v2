@@ -167,7 +167,12 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
           slotAppts.map((a, ai) => {
             const aCol = SC[a.status] || sc;
             const aDur = a.dur || 30;
-            const aHeight = Math.max(ROW_H - 4, Math.round((aDur / MINS_PER_ROW) * ROW_H) - 4);
+            // Calcular offset exacto dentro del slot de 15min
+            const slotStartMins = hr*60 + mn;
+            const apptStartMins = pt(a.time);
+            const offsetMins    = apptStartMins - slotStartMins; // 0-14 minutos de offset
+            const topOffset     = Math.round((offsetMins / MINS_PER_ROW) * ROW_H); // px desde top del slot
+            const aHeight = Math.max(ROW_H - topOffset - 2, Math.round((aDur / MINS_PER_ROW) * ROW_H) - 2);
             return ce("div", { key:a.id,
               draggable: true,
               onDragStart: e => handleDragStart(e, a),
@@ -175,7 +180,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
               onClick: e => { e.stopPropagation(); onAppt(a); },
               style:{
                 position:"absolute",
-                top: 2, left: ai===0?5:(5+ai*4), right:2,
+                top: topOffset + 1, left: ai===0?5:(5+ai*4), right:2,
                 height: aHeight + "px",
                 background: dragging?.appt?.id===a.id ? aCol+"44" : aCol+"22",
                 border:"1.5px solid "+aCol, borderRadius:5,
