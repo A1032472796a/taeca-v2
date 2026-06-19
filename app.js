@@ -220,7 +220,7 @@ export function App() {
     function showApptNotif(a) {
       const staffName = users.find(u => u.id === (a.stId||a.st_id))?.name || "Tu profesional";
       const title     = "📅 Nueva cita — " + (a.client || "Cliente");
-      const body      = `✂️ ${a.svc||"Servicio"} · 👨 ${staffName}\n📆 ${a.date} a las ${a.time}`;
+      const body      = "✂️ " + (a.svc||"Servicio") + " · 👨 " + staffName + "\n📆 " + a.date + " a las " + a.time;
 
       // 1. Notificación nativa del navegador
       if (window.Notification?.permission === "granted") {
@@ -230,18 +230,17 @@ export function App() {
       // 2. Banner visual
       const div = document.createElement("div");
       div.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#111820;border:1.5px solid #c9a84c;border-radius:14px;padding:14px 16px;max-width:300px;box-shadow:0 4px 24px #000c;font-family:system-ui,sans-serif;animation:tslideIn .3s ease";
-      div.innerHTML = `
-        <style>@keyframes tslideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}</style>
-        <div style="display:flex;gap:10px;align-items:flex-start">
-          <div style="font-size:22px">📅</div>
-          <div style="flex:1">
-            <div style="font-weight:900;color:#c9a84c;font-size:13px;margin-bottom:4px">Nueva cita agendada</div>
-            <div style="color:#f0f0f0;font-size:12px;font-weight:700">${a.client||"Cliente"}</div>
-            <div style="color:#aaa;font-size:11px;margin-top:2px">✂️ ${a.svc||""} · 👨 ${staffName}</div>
-            <div style="color:#4ecdc4;font-size:11px;font-weight:700;margin-top:3px">📆 ${a.date} · ${a.time}</div>
-          </div>
-          <button onclick="this.closest('div[style]').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>
-        </div>`;
+      div.innerHTML = '<style>@keyframes tslideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}</style>'
+        + '<div style="display:flex;gap:10px;align-items:flex-start">'
+        + '<div style="font-size:22px">📅</div>'
+        + '<div style="flex:1">'
+        + '<div style="font-weight:900;color:#c9a84c;font-size:13px;margin-bottom:4px">Nueva cita agendada</div>'
+        + '<div style="color:#f0f0f0;font-size:12px;font-weight:700">' + (a.client||"Cliente") + '</div>'
+        + '<div style="color:#aaa;font-size:11px;margin-top:2px">✂️ ' + (a.svc||"") + ' · 👨 ' + staffName + '</div>'
+        + '<div style="color:#4ecdc4;font-size:11px;font-weight:700;margin-top:3px">📆 ' + a.date + ' · ' + a.time + '</div>'
+        + '</div>'
+        + '<button onclick="this.closest(\'div[style]\').remove()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>'
+        + '</div>';
       document.body.appendChild(div);
       setTimeout(() => { try { div.remove(); } catch {} }, 9000);
 
