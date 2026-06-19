@@ -217,7 +217,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [schUser,  setSchUser]  = useState(null);
   const [adet,     setAdet]     = useState(null);
   const [nslot,    setNslot]    = useState(null);
-  const [abonoMdl, setAbonoMdl] = useState(null);
+  const [abonoMdl,    setAbonoMdl]    = useState(null);
+  const [reschedMdl,  setReschedMdl]  = useState(null); // cita a reagendar
   const [prodSearch,setProdSearch] = useState("");
   const [notifs,   setNotifs]   = useState([]);
   const [showN,    setShowN]    = useState(false);
@@ -539,6 +540,127 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     );
   }
 
+  // ─── REAGENDAR MODAL ─────────────────────────────────────────
+  function RescheduleMdl() {
+    if (!reschedMdl) return null;
+    const a = reschedMdl;
+    const [date2, setDate2] = useState(a.date);
+    const [time2, setTime2] = useState(a.time);
+    const [saving, setSaving] = useState(false);
+    const [err2,   setErr2]   = useState("");
+
+    // Botones rápidos de ajuste de hora
+    const QUICK = [-15,-10,-5,5,10,15];
+
+    function adjustTime(mins) {
+      const [h,m] = time2.split(":").map(Number);
+      let total = h*60 + m + mins;
+      total = Math.max(8*60, Math.min(20*60, total));
+      // snap a múltiplo de 15
+      total = Math.round(total/15)*15;
+      const nh = Math.floor(total/60);
+      const nm = total%60;
+      setTime2((nh<10?"0":"")+nh+":"+String(nm).padStart(2,"0"));
+    }
+
+    // Verificar conflictos
+    function hasConflict(newDate, newTime) {
+      return appts.some(other => {
+        if (other.id === a.id) return false;
+        if ((other.stId||other.st_id) !== (a.stId||a.st_id)) return false;
+        if (other.date !== newDate) return false;
+        const oStart = pt(other.time);
+        const oEnd   = oStart + (other.dur||30);
+        const nStart = pt(newTime);
+        const nEnd   = nStart + (a.dur||30);
+        return nStart < oEnd && nEnd > oStart;
+      });
+    }
+
+    async function save() {
+      setErr2("");
+      if (hasConflict(date2, time2)) {
+        setErr2("⚠️ Ya hay una cita en ese horario para este profesional");
+        return;
+      }
+      setSaving(true);
+      try {
+        const upd = {...a, date:date2, time:time2};
+        setAppts(x => x.map(ap => ap.id===a.id ? upd : ap));
+        await DB.save("appointments", a.id, upd);
+        setReschedMdl(null);
+        setAdet(null);
+      } catch(e) {
+        setErr2("Error al guardar: " + e.message);
+      }
+      setSaving(false);
+    }
+
+    const conflict = hasConflict(date2, time2);
+
+    return ce("div", {style:S.ov, onClick:()=>setReschedMdl(null)},
+      ce("div", {style:S.mb, onClick:e=>e.stopPropagation()},
+        ce("div", {style:{...S.row, marginBottom:14}},
+          ce("b", {style:{fontSize:15, color:C.accent}}, "📅 Reagendar cita"),
+          ce("button", {type:"button", onClick:()=>setReschedMdl(null),
+            style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}, "✕")
+        ),
+        // Info de la cita
+        ce("div", {style:{background:C.accent+"11",border:"1px solid "+C.accent+"33",borderRadius:11,padding:"10px 13px",marginBottom:14}},
+          ce("b",   {style:{fontSize:13}}, a.client),
+          ce("div", {style:{color:C.muted,fontSize:11,marginTop:2}}, a.svc, " · ", a.dur||30, " min"),
+          ce("div", {style:{color:C.muted,fontSize:11}}, "Profesional: ", users.find(u=>u.id===(a.stId||a.st_id))?.name||"")
+        ),
+        // Fecha
+        ce("div", {style:{marginBottom:12}},
+          ce("label", {style:S.lbl}, "Fecha"),
+          ce("input", {style:S.inp, type:"date", value:date2, onChange:e=>setDate2(e.target.value)})
+        ),
+        // Hora actual + ajuste rápido
+        ce("label", {style:S.lbl}, "Hora"),
+        ce("div", {style:{background:"#161e2a",borderRadius:12,padding:"12px",marginBottom:12}},
+          // Hora actual grande
+          ce("div", {style:{textAlign:"center",marginBottom:12}},
+            ce("div", {style:{fontSize:36,fontWeight:900,color:C.accent,letterSpacing:4}}, time2),
+            ce("div", {style:{fontSize:11,color:C.muted,marginTop:2}}, "hora actual")
+          ),
+          // Botones rápidos
+          ce("div", {style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:8}},
+            QUICK.map(q =>
+              ce("button", {type:"button", key:q, onClick:()=>adjustTime(q),
+                style:{
+                  padding:"8px 4px", borderRadius:9, border:"1.5px solid "+(q<0?C.err+"44":C.ok+"44"),
+                  background: q<0?C.err+"11":C.ok+"11",
+                  color: q<0?C.err:C.ok,
+                  fontSize:13, fontWeight:700, cursor:"pointer"
+                }
+              }, (q>0?"+":"")+q+" min")
+            )
+          ),
+          // O elegir slot exacto
+          ce("div", {style:{borderTop:"1px solid "+C.border,paddingTop:10}},
+            ce("label", {style:{...S.lbl,marginBottom:6}}, "O elige hora exacta"),
+            ce("select", {style:S.inp, value:time2, onChange:e=>setTime2(e.target.value)},
+              SLOTS.map(s => ce("option",{key:s,value:s},s))
+            )
+          )
+        ),
+        // Conflicto warning
+        conflict && date2===a.date && time2!==a.time && ce("div", {
+          style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"9px 12px",marginBottom:10,fontSize:12,color:C.err}
+        }, "⚠️ Hay una cita que se superpone en este horario"),
+        err2 && ce("div", {style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}}, err2),
+        ce("div", {style:{display:"flex",gap:10,marginTop:4}},
+          ce("button", {type:"button", style:{...S.btn("ghost"),flex:1}, onClick:()=>setReschedMdl(null)}, "Cancelar"),
+          ce("button", {type:"button",
+            style:{...S.btn(conflict?"ghost":"gold"), flex:2, color:"#000", opacity:saving||conflict?0.5:1},
+            disabled:saving||conflict, onClick:save
+          }, saving?"⏳ Guardando...":"✅ Guardar")
+        )
+      )
+    );
+  }
+
   async function confirmAppt(a){
     const upd={...a,status:"confirmado"};
     setAppts(x=>x.map(aa=>aa.id===upd.id?upd:aa)); setAdet(null);
@@ -623,8 +745,13 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               staffL.map(u=>ce("button",{type:"button",key:u.id,onClick:()=>setSelSt(u.id),style:{...S.btn(selSt===u.id?"cyan":"ghost"),padding:"4px 9px",fontSize:10,whiteSpace:"nowrap",color:selSt===u.id?"#000":C.muted}},u.name.split(" ")[0]))
             ),
             ce(WeekCal,{appts:visAppts,users,stId:selSt,
-              onSlot:(d,h,m,sid)=>setNslot({date:ts(d),time:(h<10?"0":"")+h+":"+(m===0?"00":"30"),stId:sid}),
-              onAppt:a=>setAdet(a)
+              onSlot:(d,h,m,sid)=>setNslot({date:ts(d),time:(h<10?"0":"")+h+":"+String(m).padStart(2,"0"),stId:sid}),
+              onAppt:a=>setAdet(a),
+              onReschedule:(a,newDate,newTime)=>{
+                const upd={...a,date:newDate,time:newTime};
+                setAppts(x=>x.map(ap=>ap.id===a.id?upd:ap));
+                DB.save("appointments",a.id,upd).catch(e=>console.error(e));
+              }
             }),
             ce("button",{type:"button",style:{position:"fixed",bottom:80,right:18,background:C.accent,color:"#000",border:"none",borderRadius:"50%",width:48,height:48,fontSize:22,cursor:"pointer",fontWeight:900,boxShadow:"0 4px 14px #c9a84c55",zIndex:99},onClick:()=>setMdl({type:"appt",d:{}})},"+")),
           // CLIENTES
@@ -821,6 +948,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       )
     ),
     // Modals
+    reschedMdl && ce(RescheduleMdl,null),
     mdl?.type==="svc"    && ce(SvcMdl,null),
     mdl?.type==="prod"   && ce(ProdMdl,null),
     mdl?.type==="client" && ce(CliMdl,null),
