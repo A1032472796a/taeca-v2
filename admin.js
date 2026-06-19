@@ -242,6 +242,35 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     checkN(); const iv=setInterval(checkN,60000); return ()=>clearInterval(iv);
   },[]);
 
+
+  // ─── VALIDACIÓN CENTRAL DE CONFLICTOS ────────────────────────
+  function checkConflict(stId, date, time, dur, excludeId) {
+    const slotStart = pt(time);
+    const slotEnd   = slotStart + (dur || 30);
+    // Verificar contra otras citas
+    const citaConflict = appts.some(a => {
+      if (excludeId && a.id === excludeId) return false;
+      if ((a.stId||a.st_id) !== stId || a.date !== date) return false;
+      if (a.status === "cancelado") return false;
+      const aStart = pt(a.time);
+      const aEnd   = aStart + (a.dur || 30);
+      return slotStart < aEnd && slotEnd > aStart;
+    });
+    if (citaConflict) return "⚠️ Hay una cita que se superpone en ese horario.";
+    // Verificar almuerzo
+    const staffUser = users.find(u => u.id === stId);
+    if (staffUser?.lunchStart && staffUser?.lunchEnd) {
+      const lStart = pt(staffUser.lunchStart);
+      const lEnd   = pt(staffUser.lunchEnd);
+      if (slotStart < lEnd && slotEnd > lStart)
+        return "⚠️ Ese horario invade el almuerzo de " + staffUser.name + " (" + staffUser.lunchStart + "–" + staffUser.lunchEnd + ").";
+    }
+    // Verificar bloqueo de día
+    if (staffUser?.blocks?.[date] === true)
+      return "⚠️ " + staffUser.name + " tiene ese día bloqueado.";
+    return null; // sin conflicto
+  }
+
   async function toggleStamps(){
     const upd={...cfg,stampsOn:!stampsOn}; setCfg(upd);
     await DB.save("config",upd.id||(window._companyId?"cfg_"+window._companyId:"cfg"),upd);
@@ -331,18 +360,12 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(!wi&&!dt2){setAe("Selecciona una fecha");return;}
       if(!wi&&!tm2){setAe("Selecciona una hora");return;}
       if(!sf){setAe("Selecciona un profesional");return;}
-      // Validar que el servicio no invada el almuerzo
+      // Validar conflictos (almuerzo + citas existentes + bloqueos)
       if(!blk&&!wi&&tm2&&sf){
-        const selU3=staffL.find(u=>u.id===sf);
         const svcObj3=svcs.find(s=>s.name===sv);
         const dur3=svcObj3?svcObj3.dur:30;
-        if(selU3&&selU3.lunchStart){
-          const slotM=pt(tm2), lunchM=pt(selU3.lunchStart);
-          if(slotM<lunchM&&slotM+dur3>lunchM){
-            setAe("⚠️ Este servicio ("+dur3+"min) invade el almuerzo de "+selU3.name+" ("+selU3.lunchStart+"). Elige una hora anterior.");
-            return;
-          }
-        }
+        const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
+        if(conflict){setAe(conflict);return;}
       }
       setLoad2(true);
       try {
@@ -692,24 +715,19 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       setTime2((nh<10?"0":"")+nh+":"+String(nm).padStart(2,"0"));
     }
 
-    // Verificar conflictos
+    // Verificar conflictos usando función central
     function hasConflict(newDate, newTime) {
-      return appts.some(other => {
-        if (other.id === a.id) return false;
-        if ((other.stId||other.st_id) !== (a.stId||a.st_id)) return false;
-        if (other.date !== newDate) return false;
-        const oStart = pt(other.time);
-        const oEnd   = oStart + (other.dur||30);
-        const nStart = pt(newTime);
-        const nEnd   = nStart + (a.dur||30);
-        return nStart < oEnd && nEnd > oStart;
-      });
+      return !!checkConflict(a.stId||a.st_id, newDate, newTime, a.dur||30, a.id);
+    }
+    function conflictMsg(newDate, newTime) {
+      return checkConflict(a.stId||a.st_id, newDate, newTime, a.dur||30, a.id);
     }
 
     async function save() {
       setErr2("");
-      if (hasConflict(date2, time2)) {
-        setErr2("⚠️ Ya hay una cita en ese horario para este profesional");
+      const conflMsg = conflictMsg(date2, time2);
+      if (conflMsg) {
+        setErr2(conflMsg);
         return;
       }
       setSaving(true);
@@ -775,15 +793,15 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           )
         ),
         // Conflicto warning
-        conflict && date2===a.date && time2!==a.time && ce("div", {
+        conflictMsg(date2,time2) && ce("div", {
           style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"9px 12px",marginBottom:10,fontSize:12,color:C.err}
-        }, "⚠️ Hay una cita que se superpone en este horario"),
+        }, conflictMsg(date2,time2)),
         err2 && ce("div", {style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}}, err2),
         ce("div", {style:{display:"flex",gap:10,marginTop:4}},
           ce("button", {type:"button", style:{...S.btn("ghost"),flex:1}, onClick:()=>setReschedMdl(null)}, "Cancelar"),
           ce("button", {type:"button",
-            style:{...S.btn(conflict?"ghost":"gold"), flex:2, color:"#000", opacity:saving||conflict?0.5:1},
-            disabled:saving||conflict, onClick:save
+            style:{...S.btn(!!conflictMsg(date2,time2)?"ghost":"gold"), flex:2, color:"#000", opacity:saving||!!conflictMsg(date2,time2)?0.5:1},
+            disabled:saving||!!conflictMsg(date2,time2), onClick:save
           }, saving?"⏳ Guardando...":"✅ Guardar")
         )
       )
@@ -877,6 +895,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               onSlot:(d,h,m,sid)=>setNslot({date:ts(d),time:(h<10?"0":"")+h+":"+String(m).padStart(2,"0"),stId:sid}),
               onAppt:a=>setAdet(a),
               onReschedule:(a,newDate,newTime)=>{
+                const conflict=checkConflict(a.stId||a.st_id,newDate,newTime,a.dur||30,a.id);
+                if(conflict){console.warn("Drag blocked:",conflict);return;}
                 const upd={...a,date:newDate,time:newTime};
                 setAppts(x=>x.map(ap=>ap.id===a.id?upd:ap));
                 DB.save("appointments",a.id,upd).catch(e=>console.error(e));
