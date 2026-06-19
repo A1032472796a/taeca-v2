@@ -321,6 +321,19 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(!wi&&!dt2){setAe("Selecciona una fecha");return;}
       if(!wi&&!tm2){setAe("Selecciona una hora");return;}
       if(!sf){setAe("Selecciona un profesional");return;}
+      // Validar que el servicio no invada el almuerzo
+      if(!blk&&!wi&&tm2&&sf){
+        const selU3=staffL.find(u=>u.id===sf);
+        const svcObj3=svcs.find(s=>s.name===sv);
+        const dur3=svcObj3?svcObj3.dur:30;
+        if(selU3&&selU3.lunchStart){
+          const slotM=pt(tm2), lunchM=pt(selU3.lunchStart);
+          if(slotM<lunchM&&slotM+dur3>lunchM){
+            setAe("⚠️ Este servicio ("+dur3+"min) invade el almuerzo de "+selU3.name+" ("+selU3.lunchStart+"). Elige una hora anterior.");
+            return;
+          }
+        }
+      }
       setLoad2(true);
       try {
         const now2=new Date();
