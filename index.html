@@ -5,13 +5,65 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Taseca · Barber & Tattoo</title>
   <link rel="stylesheet" href="styles.css"/>
-  <link rel="manifest" href="manifest.json"/>
+  <!-- manifest dinámico se inyecta vía JS -->
   <meta name="theme-color" content="#080c10"/>
 </head>
 <body>
 <div id="root">
   <div style="color:#c9a84c;text-align:center;padding:40px;font-size:18px">Cargando Taseca...</div>
 </div>
+
+<!-- ── Manifest + SW dinámico por empresa ── -->
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var slug   = params.get("e") || null;
+
+  // 1. Manifest dinámico con start_url exacto
+  var startUrl = window.location.origin + (slug ? "/?e=" + slug : "/");
+  var manifest = {
+    name: slug ? "Taseca Citas" : "Taseca",
+    short_name: "Taseca",
+    start_url: startUrl,
+    scope: window.location.origin + "/",
+    display: "standalone",
+    background_color: "#080c10",
+    theme_color: "#080c10",
+    icons: [
+      { src: "/icon-96.png",  sizes: "96x96",   type: "image/png" },
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
+  };
+  var blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+  var link = document.createElement("link");
+  link.rel  = "manifest";
+  link.href = URL.createObjectURL(blob);
+  document.head.appendChild(link);
+
+  // 2. Service Worker — solo si hay empresa (slug)
+  if ("serviceWorker" in navigator && slug) {
+    navigator.serviceWorker.register("/sw.js")
+      .then(function(reg) {
+        console.log("[Taseca] SW registrado ✓");
+        // Enviar slug al SW para que lo recuerde
+        function sendSlug(sw) {
+          sw.postMessage({ type: "SET_SLUG", slug: slug });
+        }
+        if (reg.active)    sendSlug(reg.active);
+        if (reg.installing) reg.installing.addEventListener("statechange", function() {
+          if (this.state === "activated") sendSlug(this);
+        });
+        navigator.serviceWorker.ready.then(function(r) {
+          if (r.active) sendSlug(r.active);
+        });
+      })
+      .catch(function(e) {
+        console.warn("[Taseca] SW error:", e.message);
+      });
+  }
+})();
+</script>
 
 <!-- ── Globals ── -->
 <script>
