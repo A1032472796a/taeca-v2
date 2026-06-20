@@ -8,6 +8,13 @@ const { createElement: ce, useState } = React;
 const ROW_H = 26;
 const MINS_PER_ROW = 15;
 
+// Convertir hora militar a AM/PM
+function fmtHour(hr) {
+  if (hr === 0)  return "12 AM";
+  if (hr === 12) return "12 PM";
+  return hr < 12 ? hr + " AM" : (hr-12) + " PM";
+}
+
 // ─── WEEK CALENDAR ───────────────────────────────────────────────
 export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
   const [view, setView] = useState("day");
@@ -131,7 +138,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
         isHour
-          ? ce("span", { style:{ fontSize:8, color:C.muted, fontWeight:700 } }, hr+":00")
+          ? ce("span", { style:{ fontSize:8, color:C.muted, fontWeight:700 } }, fmtHour(hr))
           : ce("span", { style:{ fontSize:7, color:C.border+"88" } }, ":30")
       ),
       cols.map((su, si) => {
@@ -224,7 +231,7 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
       ce("div", { style:{ width:36, flexShrink:0, display:"flex", alignItems:"flex-start",
                            justifyContent:"flex-end", paddingRight:4, paddingTop:2,
                            borderRight:"2px solid "+C.border+"66" } },
-        (mn===0)?ce("span",{style:{fontSize:8,color:C.muted,fontWeight:700}},hr+":00"):(mn===30)?ce("span",{style:{fontSize:7,color:C.border}},":30"):ce("span",{style:{fontSize:6,color:C.border+"44"}},":"+String(mn).padStart(2,"0"))
+        (mn===0)?ce("span",{style:{fontSize:8,color:C.muted,fontWeight:700}},fmtHour(hr)):(mn===30)?ce("span",{style:{fontSize:7,color:C.border}},":30"):ce("span",{style:{fontSize:6,color:C.border+"44"}},":"+String(mn).padStart(2,"0"))
       ),
       wk.map((d, di) => {
         const ds          = ts(d);
