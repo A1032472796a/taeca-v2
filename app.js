@@ -212,6 +212,37 @@ export function App() {
     boot();
   }, [init]);
 
+  // ─── MANIFEST DINÁMICO por empresa ───────────────────────────
+  useEffect(() => {
+    const slug = window._companySlug;
+    if (!slug) return; // sin empresa — usar manifest.json estático
+    const startUrl = window.location.origin + "/?e=" + slug;
+    const manifest = {
+      name: "Taseca",
+      short_name: "Taseca",
+      start_url: startUrl,
+      scope: startUrl,
+      display: "standalone",
+      background_color: "#080c10",
+      theme_color: "#080c10",
+      icons: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" }
+      ]
+    };
+    // Crear blob URL e inyectar en <link rel="manifest">
+    const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+    const url  = URL.createObjectURL(blob);
+    let link = document.querySelector("link[rel=manifest]");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    link.href = url;
+    console.log("[Taseca] Manifest dinámico → start_url:", startUrl);
+  }, []); // una sola vez
+
   // ─── NOTIFICACIONES: polling cada 30s para citas nuevas ─────────
   useEffect(() => {
     // Guardar IDs conocidos al arrancar
