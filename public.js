@@ -27,48 +27,62 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
   const staffL = users.filter(u => u.role === "barbero" || u.role === "tatuador");
   const days   = calDays(yr, mo);
 
-  function slotOk(d, sl) {
-    if (!stf) return false;
-    const ds = ts(d);
-    if (ds < today()) return false;
+  // ── AGENDA CONTINUA: sin slots fijos ─────────────────────────
+  function getAvailableSlots(d, staffUser, service) {
+    if (!staffUser || !d) return [];
+    const ds  = ts(d);
+    const dur = service ? service.dur : 30;
+    const wS  = pt(staffUser.wStart || "09:00");
+    const wE  = pt(staffUser.wEnd   || "19:00");
+    const lS  = staffUser.lunchStart ? pt(staffUser.lunchStart) : null;
+    const lE  = staffUser.lunchEnd   ? pt(staffUser.lunchEnd)   : null;
+
+    // Citas del día ordenadas
+    const busy = appts
+      .filter(a => (a.stId||a.st_id)===staffUser.id && a.date===ds && a.status!=="cancelado" && a.status!=="bloqueado")
+      .map(a => ({ start:pt(a.time), end:pt(a.time)+(a.dur||30) }));
+    if (lS!==null && lE!==null) busy.push({ start:lS, end:lE });
+    busy.sort((a,b) => a.start-b.start);
+
+    // Calcular ventanas libres
+    const result = [];
+    let cursor = wS;
     if (ds === today()) {
       const now2 = new Date();
-      if (pt(sl) <= now2.getHours()*60+now2.getMinutes()) return false;
+      cursor = Math.max(cursor, now2.getHours()*60 + now2.getMinutes() + 1);
     }
-    if (!stf.workDays?.includes(d.getDay())) return false;
-    const sm = pt(sl);
-    if (sm < pt(stf.wStart||"09:00") || sm >= pt(stf.wEnd||"19:00")) return false;
-    if (stf.blocks?.[ds] === true) return false;
-    // Bloquear si el slot está DENTRO del almuerzo
-    if (stf.lunchStart && stf.lunchEnd && sm >= pt(stf.lunchStart) && sm < pt(stf.lunchEnd)) return false;
-    // Bloquear si el servicio INVADE el almuerzo
-    // Solo aplica si empieza ANTES del almuerzo y terminaría DESPUÉS del inicio del almuerzo
-    const dur3 = svc ? svc.dur : 30;
-    if (stf.lunchStart && sm < pt(stf.lunchStart) && sm + dur3 > pt(stf.lunchStart)) return false;
-    // Check that no appointment overlaps within the service duration
-    const slMins = pt(sl);
-    const dur2 = svc ? svc.dur : 30;
-    return !appts.some(a => {
-      if (a.stId !== stf.id || a.date !== ds) return false;
-      const aMins = pt(a.time);
-      const aDur = a.dur || 30;
-      // overlap if slots intersect
-      return slMins < aMins + aDur && slMins + dur2 > aMins;
-    });
+    for (const blk of busy) {
+      // Slots continuos desde cursor hasta inicio del bloque
+      let t = cursor;
+      while (t + dur <= blk.start) {
+        result.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));
+        t += 5;
+      }
+      cursor = Math.max(cursor, blk.end);
+    }
+    // Slots después del último bloque
+    let t = cursor;
+    while (t + dur <= wE) {
+      result.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));
+      t += 5;
+    }
+    return result;
+  }
+
+  function slotOk(d, sl) {
+    return getAvailableSlots(d, stf, svc).includes(sl);
   }
   function dayOk(d) {
     if (!stf) return false;
     const ds = ts(d);
-    if (ds < today()) return false;
-    if (!stf.workDays?.includes(d.getDay())) return false;
-    if (stf.blocks?.[ds] === true) return false;
-    return SLOTS.some(sl => slotOk(d, sl));
+    if (ds < today() || !stf.workDays?.includes(d.getDay()) || stf.blocks?.[ds]===true) return false;
+    return getAvailableSlots(d, stf, svc).length > 0;
   }
   const avSlots = { m: [], a: [] };
   if (stf && dt) {
-    const dur = svc ? svc.dur : 30;
-    const validSlots = slotsForDuration(dur);
-    validSlots.forEach(sl => { if (slotOk(dt,sl)) { if (pt(sl)<13*60) avSlots.m.push(sl); else avSlots.a.push(sl); } });
+    getAvailableSlots(dt, stf, svc).forEach(sl => {
+      if (pt(sl) < 13*60) avSlots.m.push(sl); else avSlots.a.push(sl);
+    });
   }
 
   async function confirm() {
@@ -104,7 +118,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
   if (lv && lp) loyClient = clients.find(c => c.phone === lp) || null;
   const loyAppts = loyClient ? appts.filter(a => a.client===loyClient.name||a.phone===loyClient.phone).slice().reverse().slice(0,5) : [];
 
-  const pubTabs = [["booking","📅 Agendar"],["registro","📝 Registro"]];
+  const pubTabs = [["booking","📅 Agendar"],["gestionar","🔍 Mis citas"],["registro","📝 Registro"]];
   if (stampsOn) pubTabs.push(["loyalty","🎫 Mi tarjeta"]);
 
   // ── Staff step ──
@@ -313,6 +327,98 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
             ce("button",{type:"button",style:{...S.btn(),width:"100%",color:"#000",marginTop:14},onClick:()=>{setRdone(false);setRn("");setRp("");setRe("");setRb("");setPtab("booking");}},"Agendar cita")
           )
         ),
+        // Gestionar cita
+        ptab==="gestionar" && (()=>{
+          const [gPhone, setGPhone] = React.useState("");
+          const [gCitas, setGCitas] = React.useState(null); // null=sin buscar, []=vacío
+          const [gErr,   setGErr]   = React.useState("");
+          const [gReschAppt, setGReschAppt] = React.useState(null);
+
+          function buscar() {
+            const digits = gPhone.replace(/\D/g,"");
+            if (digits.length !== 10) { setGErr("Ingresa un número de 10 dígitos"); return; }
+            setGErr("");
+            const found = appts.filter(a =>
+              (a.phone||"") === digits && a.status !== "cancelado"
+            ).sort((a,b) => a.date > b.date ? -1 : 1);
+            setGCitas(found);
+          }
+
+          function cancelarCita(a) {
+            // Optimistic UI
+            const upd = {...a, status:"cancelado"};
+            // Notify parent to update appts — via onBook hack: we call window directly
+            fetch(window.SB_URL+"/rest/v1/appointments?id=eq."+a.id, {
+              method:"PATCH",
+              headers:{"Content-Type":"application/json","apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY},
+              body:JSON.stringify({status:"cancelado"})
+            }).catch(()=>{});
+            setGCitas(prev => prev.map(c => c.id===a.id ? upd : c));
+          }
+
+          const staffFor = (a) => users.find(u=>u.id===(a.stId||a.st_id));
+          const SC2 = {confirmado:"#4ecdc4",pendiente:"#f39c12",cancelado:"#e74c3c",walk_in:"#8e44ad"};
+          const SL2 = {confirmado:"Confirmado",pendiente:"Pendiente",cancelado:"Cancelado",walk_in:"Sin cita"};
+
+          return ce("div", null,
+            ce("div",{style:{textAlign:"center",marginBottom:18}},
+              ce("div",{style:{fontSize:32,marginBottom:6}},"🔍"),
+              ce("div",{style:{fontWeight:700,fontSize:15,color:C.accent,marginBottom:3}},"Gestionar mis citas"),
+              ce("div",{style:{color:C.muted,fontSize:12}},"Busca tus citas por número de celular")
+            ),
+            ce("div",{style:{marginBottom:10}},
+              ce("label",{style:S.lbl},"Tu número de celular"),
+              ce("div",{style:{display:"flex",gap:8}},
+                ce("input",{
+                  style:{...S.inp,flex:1,
+                    borderColor:gPhone.replace(/\D/g,"").length>0?(gPhone.replace(/\D/g,"").length===10?C.ok:C.err):C.border},
+                  type:"tel",placeholder:"3001234567",value:gPhone,
+                  onChange:e=>setGPhone(e.target.value.replace(/\D/g,"").slice(0,10)),
+                  onKeyDown:e=>{if(e.key==="Enter")buscar();}
+                }),
+                ce("button",{type:"button",style:{...S.btn(),padding:"10px 16px",color:"#000"},onClick:buscar},"Buscar")
+              )
+            ),
+            gErr&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:10}},"⚠️ ",gErr),
+            gCitas!==null && gCitas.length===0 && ce("div",{style:{textAlign:"center",padding:"28px",color:C.muted,fontSize:13,background:C.card,borderRadius:12}},
+              ce("div",{style:{fontSize:28,marginBottom:8}},"📭"),
+              "No encontramos citas para ese número"
+            ),
+            gCitas!==null && gCitas.length>0 && ce("div",null,
+              ce("div",{style:{fontSize:12,color:C.muted,marginBottom:10}},gCitas.length," cita(s) encontrada(s)"),
+              gCitas.map(a => {
+                const staff = staffFor(a);
+                const isCancelled = a.status==="cancelado";
+                return ce("div",{key:a.id,style:{...S.card,border:"1px solid "+(SC2[a.status]||C.border)+"55",marginBottom:10,opacity:isCancelled?0.6:1}},
+                  ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
+                    ce("div",null,
+                      ce("b",{style:{fontSize:14}},a.client||"—"),
+                      ce("div",{style:{color:C.muted,fontSize:11,marginTop:2}},
+                        "✂️ ",a.svc||"—"," · 👨 ",(staff?staff.name:"—")
+                      ),
+                      ce("div",{style:{color:C.accent,fontSize:12,fontWeight:700,marginTop:3}},
+                        "📆 ",a.date," · ⏰ ",a.time
+                      )
+                    ),
+                    ce("span",{style:{background:(SC2[a.status]||C.muted)+"22",color:SC2[a.status]||C.muted,fontSize:10,padding:"3px 8px",borderRadius:20,fontWeight:700}},
+                      SL2[a.status]||a.status)
+                  ),
+                  !isCancelled && ce("div",{style:{display:"flex",gap:8}},
+                    ce("button",{type:"button",
+                      style:{...S.btn("gold"),flex:1,fontSize:11,color:"#000",padding:"8px"},
+                      onClick:()=>{ setGReschAppt(a); setPtab("booking"); setStep(3); setStf(staff||null); setSvc(svcs.find(sv=>sv.name===a.svc)||null); }
+                    },"📅 Reagendar"),
+                    ce("button",{type:"button",
+                      style:{...S.btn("err"),flex:1,fontSize:11,padding:"8px"},
+                      onClick:()=>{ if(confirm("¿Cancelar esta cita?")) cancelarCita(a); }
+                    },"✕ Cancelar")
+                  )
+                );
+              })
+            )
+          );
+        })(),
+
         // Loyalty
         ptab==="loyalty" && stampsOn && ce("div",null,
           !lv && ce("div",null,
