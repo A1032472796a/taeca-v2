@@ -43,7 +43,8 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
     const svc2  = svcs.find(sv => sv.name===a.svc) || null;
     setStf(staff);
     setSvc(svc2);
-    // Pre-llenar teléfono y nombre en step 4
+    // Guardar cita original para reagendar sin pedir datos
+    window._gReagendarAppt  = a;
     window._gReagendarPhone = a.phone || gPhone;
     window._gReagendarName  = a.client || "";
     setStep(3);
@@ -325,8 +326,34 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
         )
       ),
       ce("div",{style:{display:"flex",gap:9}},
-        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>setStep(2)},"← Volver"),
-        ce("button",{type:"button",style:{...S.btn(),flex:2,opacity:dt&&tm?1:0.4},disabled:!(dt&&tm),onClick:()=>setStep(4)},"Continuar →")
+        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>{
+          if(window._gReagendarAppt){setPtab("gestionar");window._gReagendarAppt=null;}
+          else setStep(2);
+        }},"← Volver"),
+        ce("button",{type:"button",style:{...S.btn(),flex:2,opacity:dt&&tm?1:0.4},disabled:!(dt&&tm),
+          onClick:async()=>{
+            // Si viene de reagendar — guardar directamente sin pedir datos
+            if(window._gReagendarAppt){
+              const orig = window._gReagendarAppt;
+              const upd  = {...orig, date:ts(dt), time:tm};
+              // Actualizar en Supabase
+              try {
+                await fetch(window.SB_URL+"/rest/v1/appointments?id=eq."+orig.id,{
+                  method:"PATCH",
+                  headers:{"Content-Type":"application/json","apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY},
+                  body:JSON.stringify({date:ts(dt),time:tm})
+                });
+              } catch(e){ console.error(e); }
+              window._gReagendarAppt=null;
+              window._gReagendarPhone=null;
+              window._gReagendarName=null;
+              // Mostrar éxito
+              setStep(5);
+            } else {
+              setStep(4);
+            }
+          }
+        }, window._gReagendarAppt ? "✅ Confirmar reagenda" : "Continuar →")
       )
     );
   }
