@@ -157,17 +157,26 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
           slotMins + 15 > pt(su.lunchStart); // slot de 15min que toca el almuerzo
         const isToday = ts(cur) === today();
         const slotAppts = getStaffAppts(su.id, ts(cur), hr, mn);
+        // Verificar si el slot está cubierto por una cita que empezó antes
+        const slotMinsCheck = hr*60+mn;
+        const isOccupied = wa.some(a => {
+          if ((a.stId||a.st_id) !== su.id || a.date !== ts(cur)) return false;
+          if (a.status === "cancelado") return false;
+          const aStart = pt(a.time);
+          const aEnd   = aStart + (a.dur||30);
+          return slotMinsCheck >= aStart && slotMinsCheck < aEnd;
+        });
         const slotStr = (hr<10?"0":"")+hr+":"+String(mn).padStart(2,"0");
         const isDragTarget   = dragging && dragOver === su.id+"_"+slotStr && iw && !ib;
         const isConflict     = dragging && dragOver === "conflict_"+slotStr;
         return ce("div", { key:su.id,
-          onClick: () => { if (!dragging && slotAppts.length > 0) onAppt(slotAppts[0]); else if (!dragging && iw && !ib && !isLunch && !wouldInvadeLunch) onSlot(cur, hr, mn, su.id); },
+          onClick: () => { if (!dragging && slotAppts.length > 0) onAppt(slotAppts[0]); else if (!dragging && iw && !ib && !isLunch && !wouldInvadeLunch && !isOccupied) onSlot(cur, hr, mn, su.id); },
           onDragOver: e => iw && !ib ? handleDragOver(e, su.id+"_"+slotStr) : null,
           onDragLeave: () => setDragOver(null),
           onDrop: e => handleDrop(e, hr, mn, su),
           style:{ flex:1, minWidth:120, borderLeft:"2px solid "+sc+"66", position:"relative",
-                  background: isConflict?C.err+"22":isDragTarget?sc+"22":!iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
-                  cursor: dragging?(isDragTarget?"copy":"no-drop"):iw&&!ib?"pointer":"default",
+                  background: isConflict?C.err+"22":isDragTarget?sc+"22":isOccupied?"#1a1520":!iw?"#0a0c10":ib?"#1a0808":isToday?"#0e1520":"transparent",
+                  cursor: dragging?(isDragTarget?"copy":"no-drop"):iw&&!ib&&!isOccupied?"pointer":"default",
                   overflow:"visible",
                   outline: isConflict?"2px dashed "+C.err:isDragTarget?"2px dashed "+sc:"none" } },
           ce("div", { style:{ position:"absolute", left:0, top:0, bottom:0, width:2, background:sc+"44" } }),
