@@ -147,10 +147,14 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     const lS  = staffUser.lunchStart ? pt(staffUser.lunchStart) : null;
     const lE  = staffUser.lunchEnd   ? pt(staffUser.lunchEnd)   : null;
 
-    // Citas del día ordenadas
+    // Citas del día ordenadas — incluir bloqueados como ocupados
     const busy = appts
-      .filter(a => (a.stId||a.st_id)===staffUser.id && a.date===ds && a.status!=="cancelado" && a.status!=="bloqueado")
-      .map(a => ({ start:pt(a.time), end:pt(a.time)+(a.dur||30) }));
+      .filter(a => (a.stId||a.st_id)===staffUser.id && a.date===ds && a.status!=="cancelado")
+      .map(a => ({
+        start: pt(a.time),
+        // Bloqueados: usar duración real o 15min mínimo para bloquear el slot
+        end: pt(a.time) + (a.dur || 15)
+      }));
     if (lS!==null && lE!==null) busy.push({ start:lS, end:lE });
     busy.sort((a,b) => a.start-b.start);
 
