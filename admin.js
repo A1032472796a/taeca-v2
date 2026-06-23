@@ -344,6 +344,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     const [st2,setSt2]=useState(d.status||"pendiente"); const [sf,setSf]=useState(d.stId||selSt||"");
     const [aph,setAph]=useState(d.phone||""); const [aem,setAem]=useState(d.email||"");
     const [ae,setAe]=useState(""); const [load2,setLoad2]=useState(false);
+    const [customDur,setCustomDur]=useState(false); const [manualDur,setManualDur]=useState(30);
+    const [blkDur,setBlkDur]=useState(15); // duración del bloqueo en minutos
     const [clientFound3,setClientFound3]=useState(null);
     function handleApptPhone(v){
       const digits=v.replace(/\D/g,"").slice(0,10); setAph(digits);
@@ -393,7 +395,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           date:wi?today():dt2,
           time:wi?((now2.getHours()<10?"0":"")+now2.getHours()+":"+String(Math.floor(now2.getMinutes()/15)*15).padStart(2,"0")):tm2,
           status:blk?"bloqueado":wi?"walk_in":st2,
-          dur:empCfg?.dur||(svcObj?.dur||30)
+          dur:blk?blkDur:customDur?manualDur:(empCfg?.dur||(svcObj?.dur||30))
         };
         d.id?setAppts(x=>x.map(a=>a.id===d.id?item:a)):setAppts(x=>[...x,item]);
         setMdl(null); setNslot(null);
@@ -435,6 +437,38 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
       ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
       !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
+      !blk&&sv&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"10px 13px",marginBottom:10,border:"1px solid "+C.border}},
+        ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:customDur?10:0}},
+          ce("div",null,
+            ce("b",{style:{fontSize:12}},customDur?"⏱ Duración personalizada":"⏱ Duración del servicio"),
+            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},
+              customDur ? manualDur+" min" : (()=>{const s=svcs.find(x=>x.name===sv);return s?(s.dur+" min"):"—";})()
+            )
+          ),
+          ce(Toggle,{val:customDur,onChange:()=>{
+            if(!customDur){const s=svcs.find(x=>x.name===sv);setManualDur(s?s.dur:30);}
+            setCustomDur(v=>!v);
+          }})
+        ),
+        customDur&&ce("div",null,
+          ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
+            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.max(5,v-5)),
+              style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
+            ce("div",{style:{fontSize:22,fontWeight:900,color:C.accent,minWidth:70,textAlign:"center"}},manualDur," min"),
+            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.min(240,v+5)),
+              style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
+          ),
+          ce("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}},
+            [15,20,25,30,40,45,60,90,120].map(m=>
+              ce("button",{type:"button",key:m,onClick:()=>setManualDur(m),
+                style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(manualDur===m?C.accent:C.border),
+                  background:manualDur===m?C.accent+"22":"transparent",color:manualDur===m?C.accent:C.muted,
+                  fontSize:11,cursor:"pointer",fontWeight:manualDur===m?700:400}
+              },m+"m")
+            )
+          )
+        )
+      ),
       !wi&&ce(React.Fragment,null,
         ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
         ce("div",{style:{marginBottom:10}},
@@ -472,6 +506,31 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         )
       ),
         !blk&&ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
+      ),
+      blk&&tm2&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
+        ce("b",{style:{fontSize:12,color:C.err,display:"block",marginBottom:10}},"🔒 Duración del bloqueo"),
+        ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center",marginBottom:8}},
+          ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.max(5,v-5)),
+            style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
+          ce("div",{style:{fontSize:22,fontWeight:900,color:C.err,minWidth:70,textAlign:"center"}},blkDur," min"),
+          ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.min(480,v+5)),
+            style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
+        ),
+        ce("div",{style:{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}},
+          [15,30,45,60,90,120].map(m=>
+            ce("button",{type:"button",key:m,onClick:()=>setBlkDur(m),
+              style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(blkDur===m?C.err:C.border),
+                background:blkDur===m?C.err+"22":"transparent",color:blkDur===m?C.err:C.muted,
+                fontSize:11,cursor:"pointer",fontWeight:blkDur===m?700:400}
+            },m+"m")
+          )
+        ),
+        tm2&&ce("div",{style:{fontSize:11,color:C.muted,textAlign:"center",marginTop:8}},
+          "Bloqueado: ",tm2," → ",(()=>{
+            const end=pt(tm2)+blkDur;
+            return (Math.floor(end/60)<10?"0":"")+Math.floor(end/60)+":"+String(end%60).padStart(2,"0");
+          })()
+        )
       ),
       blk&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"10px 12px",fontSize:12,color:C.err}},"🔒 Este slot quedará bloqueado."),
       ae&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:9,padding:"9px 12px",fontSize:12,color:C.err,marginTop:8}},"⚠️ ",ae),
