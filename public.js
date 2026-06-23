@@ -5,6 +5,106 @@ import { Logo, Field, PhoneInput, StampCard, PtsBar } from "./components.js";
 
 const { createElement: ce, useState, useEffect } = React;
 
+
+// ─── GESTIONAR MIS CITAS ─────────────────────────────────────────
+function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) {
+  const [gPhone, setGPhone] = React.useState("");
+  const [gCitas, setGCitas] = React.useState(null);
+  const [gErr,   setGErr]   = React.useState("");
+
+  const SC2 = { confirmado:"#4ecdc4", pendiente:"#f39c12", cancelado:"#e74c3c", walk_in:"#8e44ad" };
+  const SL2 = { confirmado:"Confirmado", pendiente:"Pendiente", cancelado:"Cancelado", walk_in:"Sin cita" };
+
+  function buscar() {
+    const digits = gPhone.replace(/\D/g, "");
+    if (digits.length !== 10) { setGErr("Ingresa un número de 10 dígitos"); return; }
+    setGErr("");
+    const found = appts
+      .filter(a => (a.phone||"") === digits)
+      .sort((a,b) => (a.date+a.time) > (b.date+b.time) ? -1 : 1);
+    setGCitas(found);
+  }
+
+  function puedeOperar(a) {
+    // Solo puede reagendar/cancelar si faltan más de 60 minutos
+    const apptDt = new Date(a.date + "T" + a.time + ":00");
+    return (apptDt - Date.now()) > 60 * 60 * 1000;
+  }
+
+  function cancelarCita(a) {
+    fetch(window.SB_URL + "/rest/v1/appointments?id=eq." + a.id, {
+      method: "PATCH",
+      headers: { "Content-Type":"application/json", "apikey":window.SB_KEY, "Authorization":"Bearer "+window.SB_KEY },
+      body: JSON.stringify({ status:"cancelado" })
+    }).catch(() => {});
+    setGCitas(prev => prev.map(c => c.id===a.id ? {...c, status:"cancelado"} : c));
+  }
+
+  function reagendarCita(a) {
+    const staff = users.find(u => u.id===(a.stId||a.st_id)) || null;
+    const svc2  = svcs.find(sv => sv.name===a.svc) || null;
+    setStf(staff);
+    setSvc(svc2);
+    setStep(3);
+    setPtab("booking");
+  }
+
+  return ce("div", null,
+    ce("div", { style:{ textAlign:"center", marginBottom:18 } },
+      ce("div", { style:{ fontSize:34, marginBottom:6 } }, "🔍"),
+      ce("div", { style:{ fontWeight:700, fontSize:15, color:C.accent, marginBottom:3 } }, "Mis citas"),
+      ce("div", { style:{ color:C.muted, fontSize:12 } }, "Ingresa tu celular para ver y gestionar tus citas")
+    ),
+    // Buscador
+    ce("div", { style:{ marginBottom:12 } },
+      ce("label", { style:S.lbl }, "Tu número de celular"),
+      ce("div", { style:{ display:"flex", gap:8 } },
+        ce("input", {
+          style: { ...S.inp, flex:1, borderColor: gPhone.length>0?(gPhone.length===10?C.ok:C.err):C.border },
+          type:"tel", placeholder:"3001234567", value:gPhone,
+          onChange: e => setGPhone(e.target.value.replace(/\D/g,"").slice(0,10)),
+          onKeyDown: e => { if(e.key==="Enter") buscar(); }
+        }),
+        ce("button", { type:"button", style:{ ...S.btn(), padding:"10px 16px", color:"#000" }, onClick:buscar }, "Buscar")
+      )
+    ),
+    gErr && ce("div", { style:{ background:C.err+"22", border:"1px solid "+C.err+"44", borderRadius:9, padding:"8px 11px", fontSize:12, color:C.err, marginBottom:10 } }, "⚠️ ", gErr),
+    // Resultados
+    gCitas !== null && gCitas.length === 0 && ce("div", {
+      style:{ textAlign:"center", padding:"28px", background:C.card, borderRadius:12, color:C.muted }
+    },
+      ce("div", { style:{ fontSize:32, marginBottom:8 } }, "📭"),
+      ce("div", null, "No encontramos citas para ese número")
+    ),
+    gCitas !== null && gCitas.length > 0 && ce("div", null,
+      ce("div", { style:{ fontSize:11, color:C.muted, marginBottom:10 } }, gCitas.length, " cita(s) encontrada(s)"),
+      gCitas.map(a => {
+        const staff     = users.find(u => u.id===(a.stId||a.st_id));
+        const cancelled = a.status === "cancelado";
+        const operable  = puedeOperar(a) && !cancelled;
+        const col       = SC2[a.status] || C.muted;
+        return ce("div", { key:a.id, style:{ ...S.card, border:"1px solid "+col+"55", marginBottom:10, opacity:cancelled?0.55:1 } },
+          ce("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 } },
+            ce("div", null,
+              ce("b",   { style:{ fontSize:14 } }, a.client || "—"),
+              ce("div", { style:{ color:C.muted, fontSize:11, marginTop:2 } }, "✂️ ", a.svc||"—", " · 👨 ", staff?staff.name:"—"),
+              ce("div", { style:{ color:C.accent, fontSize:12, fontWeight:700, marginTop:3 } }, "📆 ", a.date, " · ⏰ ", a.time),
+              !operable && !cancelled && ce("div", { style:{ fontSize:10, color:C.err, marginTop:3 } }, "⏰ Menos de 1h — ya no se puede modificar")
+            ),
+            ce("span", { style:{ background:col+"22", color:col, fontSize:10, padding:"3px 8px", borderRadius:20, fontWeight:700 } }, SL2[a.status]||a.status)
+          ),
+          operable && ce("div", { style:{ display:"flex", gap:8 } },
+            ce("button", { type:"button", style:{ ...S.btn("gold"), flex:1, fontSize:11, color:"#000", padding:"8px" }, onClick:()=>reagendarCita(a) }, "📅 Reagendar"),
+            ce("button", { type:"button", style:{ ...S.btn("err"),  flex:1, fontSize:11, padding:"8px" },
+              onClick:()=>{ if(confirm("¿Cancelar esta cita de "+a.svc+" el "+a.date+" a las "+a.time+"?")) cancelarCita(a); }
+            }, "✕ Cancelar")
+          )
+        );
+      })
+    )
+  );
+}
+
 export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSuperAdmin, onReg }) {
   const stampsOn = cfg && cfg.stampsOn;
   const [ptab, setPtab] = useState("booking");
@@ -327,97 +427,8 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
             ce("button",{type:"button",style:{...S.btn(),width:"100%",color:"#000",marginTop:14},onClick:()=>{setRdone(false);setRn("");setRp("");setRe("");setRb("");setPtab("booking");}},"Agendar cita")
           )
         ),
-        // Gestionar cita
-        ptab==="gestionar" && (()=>{
-          const [gPhone, setGPhone] = React.useState("");
-          const [gCitas, setGCitas] = React.useState(null); // null=sin buscar, []=vacío
-          const [gErr,   setGErr]   = React.useState("");
-          const [gReschAppt, setGReschAppt] = React.useState(null);
-
-          function buscar() {
-            const digits = gPhone.replace(/\D/g,"");
-            if (digits.length !== 10) { setGErr("Ingresa un número de 10 dígitos"); return; }
-            setGErr("");
-            const found = appts.filter(a =>
-              (a.phone||"") === digits && a.status !== "cancelado"
-            ).sort((a,b) => a.date > b.date ? -1 : 1);
-            setGCitas(found);
-          }
-
-          function cancelarCita(a) {
-            // Optimistic UI
-            const upd = {...a, status:"cancelado"};
-            // Notify parent to update appts — via onBook hack: we call window directly
-            fetch(window.SB_URL+"/rest/v1/appointments?id=eq."+a.id, {
-              method:"PATCH",
-              headers:{"Content-Type":"application/json","apikey":window.SB_KEY,"Authorization":"Bearer "+window.SB_KEY},
-              body:JSON.stringify({status:"cancelado"})
-            }).catch(()=>{});
-            setGCitas(prev => prev.map(c => c.id===a.id ? upd : c));
-          }
-
-          const staffFor = (a) => users.find(u=>u.id===(a.stId||a.st_id));
-          const SC2 = {confirmado:"#4ecdc4",pendiente:"#f39c12",cancelado:"#e74c3c",walk_in:"#8e44ad"};
-          const SL2 = {confirmado:"Confirmado",pendiente:"Pendiente",cancelado:"Cancelado",walk_in:"Sin cita"};
-
-          return ce("div", null,
-            ce("div",{style:{textAlign:"center",marginBottom:18}},
-              ce("div",{style:{fontSize:32,marginBottom:6}},"🔍"),
-              ce("div",{style:{fontWeight:700,fontSize:15,color:C.accent,marginBottom:3}},"Gestionar mis citas"),
-              ce("div",{style:{color:C.muted,fontSize:12}},"Busca tus citas por número de celular")
-            ),
-            ce("div",{style:{marginBottom:10}},
-              ce("label",{style:S.lbl},"Tu número de celular"),
-              ce("div",{style:{display:"flex",gap:8}},
-                ce("input",{
-                  style:{...S.inp,flex:1,
-                    borderColor:gPhone.replace(/\D/g,"").length>0?(gPhone.replace(/\D/g,"").length===10?C.ok:C.err):C.border},
-                  type:"tel",placeholder:"3001234567",value:gPhone,
-                  onChange:e=>setGPhone(e.target.value.replace(/\D/g,"").slice(0,10)),
-                  onKeyDown:e=>{if(e.key==="Enter")buscar();}
-                }),
-                ce("button",{type:"button",style:{...S.btn(),padding:"10px 16px",color:"#000"},onClick:buscar},"Buscar")
-              )
-            ),
-            gErr&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:10}},"⚠️ ",gErr),
-            gCitas!==null && gCitas.length===0 && ce("div",{style:{textAlign:"center",padding:"28px",color:C.muted,fontSize:13,background:C.card,borderRadius:12}},
-              ce("div",{style:{fontSize:28,marginBottom:8}},"📭"),
-              "No encontramos citas para ese número"
-            ),
-            gCitas!==null && gCitas.length>0 && ce("div",null,
-              ce("div",{style:{fontSize:12,color:C.muted,marginBottom:10}},gCitas.length," cita(s) encontrada(s)"),
-              gCitas.map(a => {
-                const staff = staffFor(a);
-                const isCancelled = a.status==="cancelado";
-                return ce("div",{key:a.id,style:{...S.card,border:"1px solid "+(SC2[a.status]||C.border)+"55",marginBottom:10,opacity:isCancelled?0.6:1}},
-                  ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
-                    ce("div",null,
-                      ce("b",{style:{fontSize:14}},a.client||"—"),
-                      ce("div",{style:{color:C.muted,fontSize:11,marginTop:2}},
-                        "✂️ ",a.svc||"—"," · 👨 ",(staff?staff.name:"—")
-                      ),
-                      ce("div",{style:{color:C.accent,fontSize:12,fontWeight:700,marginTop:3}},
-                        "📆 ",a.date," · ⏰ ",a.time
-                      )
-                    ),
-                    ce("span",{style:{background:(SC2[a.status]||C.muted)+"22",color:SC2[a.status]||C.muted,fontSize:10,padding:"3px 8px",borderRadius:20,fontWeight:700}},
-                      SL2[a.status]||a.status)
-                  ),
-                  !isCancelled && ce("div",{style:{display:"flex",gap:8}},
-                    ce("button",{type:"button",
-                      style:{...S.btn("gold"),flex:1,fontSize:11,color:"#000",padding:"8px"},
-                      onClick:()=>{ setGReschAppt(a); setPtab("booking"); setStep(3); setStf(staff||null); setSvc(svcs.find(sv=>sv.name===a.svc)||null); }
-                    },"📅 Reagendar"),
-                    ce("button",{type:"button",
-                      style:{...S.btn("err"),flex:1,fontSize:11,padding:"8px"},
-                      onClick:()=>{ if(confirm("¿Cancelar esta cita?")) cancelarCita(a); }
-                    },"✕ Cancelar")
-                  )
-                );
-              })
-            )
-          );
-        })(),
+        // Gestionar — renderizado por GestionarTab component
+        ptab==="gestionar" && ce(GestionarTab, {appts,users,svcs,setStf,setSvc,setStep,setPtab}),
 
         // Loyalty
         ptab==="loyalty" && stampsOn && ce("div",null,
