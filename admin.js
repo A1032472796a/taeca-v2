@@ -435,7 +435,39 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
       !wi&&!blk&&ce(React.Fragment,null,
         ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
-        ce(Field,{label:"Hora",val:tm2,set:setTm2,opts:SLOTS.map(s=>({v:s,l:s}))}),
+        ce("div",{style:{marginBottom:10}},
+        ce("label",{style:S.lbl},"Hora"),
+        ce("select",{style:S.inp,value:tm2,onChange:e2=>setTm2(e2.target.value)},
+          ce("option",{value:""},"Seleccionar..."),
+          (()=>{
+            if(!sf||!dt2) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+            const selU4=staffL.find(u=>u.id===sf);
+            if(!selU4) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+            const svcObj4=svcs.find(s=>s.name===sv)||null;
+            const dur4=svcObj4?svcObj4.dur:30;
+            const wS=pt(selU4.wStart||"09:00"), wE=pt(selU4.wEnd||"19:00");
+            const lS=selU4.lunchStart?pt(selU4.lunchStart):null;
+            const lE=selU4.lunchEnd?pt(selU4.lunchEnd):null;
+            // Citas del día del barbero (excluyendo la actual si edita)
+            const dayCitas=appts
+              .filter(a=>(a.stId||a.st_id)===sf&&a.date===dt2&&a.status!=="cancelado"&&a.status!=="bloqueado"&&a.id!==(d.id||null))
+              .map(a=>({start:pt(a.time),end:pt(a.time)+(a.dur||30)}));
+            if(lS!==null&&lE!==null) dayCitas.push({start:lS,end:lE});
+            dayCitas.sort((a,b)=>a.start-b.start);
+            // Slots disponibles continuos de 5min
+            const available=[];
+            let cursor=wS;
+            for(const blk of dayCitas){
+              let t=cursor;
+              while(t+dur4<=blk.start){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
+              cursor=Math.max(cursor,blk.end);
+            }
+            let t=cursor;
+            while(t+dur4<=wE){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
+            return available.map(s=>ce("option",{key:s,value:s},s));
+          })()
+        )
+      ),
         ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
       ),
       blk&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"10px 12px",fontSize:12,color:C.err}},"🔒 Este slot quedará bloqueado."),
