@@ -214,12 +214,36 @@ export function WeekCal({ appts, users, stId, onSlot, onAppt, onReschedule }) {
               )
             );
           }),
-          ib && ce("div", { style:{ position:"absolute", inset:0,
-            background: isLunch
-              ? "repeating-linear-gradient(45deg,#f39c1233,#f39c1233 3px,transparent 3px,transparent 7px)"
-              : wouldInvadeLunch
+          // Bloqueo general (día bloqueado)
+          ib && !isLunch && ce("div", { style:{ position:"absolute", inset:0,
+            background: wouldInvadeLunch
               ? "repeating-linear-gradient(45deg,#f39c1222,#f39c1222 2px,transparent 2px,transparent 6px)"
               : "repeating-linear-gradient(45deg,"+C.err+"11,"+C.err+"11 3px,transparent 3px,transparent 7px)" } }),
+          // Almuerzo — bloque visual sólido con etiqueta
+          isLunch && (()=>{
+            const lunchStartMins = su.lunchStart ? pt(su.lunchStart) : null;
+            const lunchEndMins   = su.lunchEnd   ? pt(su.lunchEnd)   : null;
+            const lunchDur = lunchEndMins && lunchStartMins ? lunchEndMins - lunchStartMins : 60;
+            const lunchHeight = Math.round((lunchDur / MINS_PER_ROW) * ROW_H);
+            const isFirstSlot = lunchStartMins !== null && slotMins === lunchStartMins;
+            return ce("div", { style:{
+              position:"absolute", inset:0,
+              background:"linear-gradient(135deg,#f39c1222,#e67e2211)",
+              borderLeft:"3px solid #f39c12aa"
+            }},
+              isFirstSlot && ce("div", { style:{
+                position:"absolute", top:2, left:6, right:4,
+                background:"#f39c12ee", borderRadius:5,
+                padding:"3px 7px", zIndex:5,
+                height: lunchHeight - 4 + "px",
+                display:"flex", flexDirection:"column",
+                justifyContent:"center"
+              }},
+                ce("div",{style:{fontSize:11,fontWeight:900,color:"#000"}},"🍽 Almuerzo"),
+                ce("div",{style:{fontSize:9,color:"#00000099"}},su.lunchStart," – ",su.lunchEnd)
+              )
+            );
+          })(),
           iw && !ib && slotAppts.length === 0 && ce("div", {
             style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", paddingLeft:8, opacity:0 },
             onMouseEnter: e => e.currentTarget.style.opacity = 1,
