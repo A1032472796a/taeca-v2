@@ -433,42 +433,54 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         ce("div",null,ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ "+clientFound3.name),ce("div",{style:{fontSize:10,color:C.muted}},clientFound3.visits||0," visitas · ",clientFound3.stamps||0," sellos"))
       ),
       !blk&&!clientFound3&&aph.length===10&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"7px 12px",marginBottom:8,fontSize:11,color:C.warn}},"📋 Número nuevo — se registrará como cliente al guardar"),
-      !blk&&ce(Field,{label:"Nombre completo *",val:cn,set:setCn,ph:"Carlos Pérez"}),
+      !blk&&ce("div",{style:{marginBottom:10,position:"relative"}},
+        ce("label",{style:S.lbl},"Nombre completo *"),
+        ce("input",{
+          style:{...S.inp,borderColor:cn?C.ok:C.border},
+          placeholder:"Carlos Pérez", value:cn,
+          onChange:e2=>{
+            setCn(e2.target.value);
+            setClientFound3(null); // reset cuando escribe manualmente
+          },
+          onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+        }),
+        // Sugerencias de autocompletado por nombre
+        cn.length>=2&&!clientFound3&&ce("div",{style:{
+          position:"absolute",top:"100%",left:0,right:0,zIndex:50,
+          background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,
+          maxHeight:180,overflowY:"auto",boxShadow:"0 4px 16px #000a",marginTop:2
+        }},
+          (()=>{
+            const q=cn.toLowerCase().trim();
+            const matches=clients.filter(c=>
+              c.name.toLowerCase().includes(q) ||
+              (c.phone||"").includes(q)
+            ).slice(0,6);
+            if(!matches.length) return ce("div",{style:{padding:"10px 13px",color:C.muted,fontSize:12}},"Sin coincidencias");
+            return matches.map(c=>ce("div",{key:c.id,
+              onMouseDown:e2=>{
+                e2.preventDefault();
+                setCn(c.name);
+                setAph(c.phone||"");
+                setAem(c.email||"");
+                setClientFound3(c);
+              },
+              style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",
+                display:"flex",alignItems:"center",gap:9}
+            },
+              ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},c.name[0]),
+              ce("div",null,
+                ce("div",{style:{fontSize:12,fontWeight:700}},c.name),
+                ce("div",{style:{fontSize:10,color:C.muted}},c.phone||"",(c.visits?" · "+c.visits+" visitas":""))
+              )
+            ));
+          })()
+        )
+      ),
       !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
       ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
       !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
-      !blk&&sv&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"10px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:customDur?10:0}},
-          ce("div",null,
-            ce("b",{style:{fontSize:12}},customDur?"⏱ Duración personalizada":"⏱ Duración del servicio"),
-            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},
-              customDur ? manualDur+" min" : (()=>{const s=svcs.find(x=>x.name===sv);return s?(s.dur+" min"):"—";})()
-            )
-          ),
-          ce(Toggle,{val:customDur,onChange:()=>{
-            if(!customDur){const s=svcs.find(x=>x.name===sv);setManualDur(s?s.dur:30);}
-            setCustomDur(v=>!v);
-          }})
-        ),
-        customDur&&ce("div",null,
-          ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
-            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.max(5,v-5)),
-              style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
-            ce("div",{style:{fontSize:22,fontWeight:900,color:C.accent,minWidth:70,textAlign:"center"}},manualDur," min"),
-            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.min(240,v+5)),
-              style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
-          ),
-          ce("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}},
-            [15,20,25,30,40,45,60,90,120].map(m=>
-              ce("button",{type:"button",key:m,onClick:()=>setManualDur(m),
-                style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(manualDur===m?C.accent:C.border),
-                  background:manualDur===m?C.accent+"22":"transparent",color:manualDur===m?C.accent:C.muted,
-                  fontSize:11,cursor:"pointer",fontWeight:manualDur===m?700:400}
-              },m+"m")
-            )
-          )
-        )
-      ),
+
       !wi&&ce(React.Fragment,null,
         ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
         ce("div",{style:{marginBottom:10}},
@@ -506,6 +518,38 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         )
       ),
         !blk&&ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
+      ),
+      !blk&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"10px 13px",marginBottom:10,border:"1px solid "+C.border}},
+        ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:customDur?10:0}},
+          ce("div",null,
+            ce("b",{style:{fontSize:12}},customDur?"⏱ Duración personalizada":"⏱ Duración del servicio"),
+            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},
+              customDur ? manualDur+" min" : (()=>{const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];return s?(empC?.dur||s.dur)+" min":"30 min";})()
+            )
+          ),
+          ce(Toggle,{val:customDur,onChange:()=>{
+            if(!customDur){const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];setManualDur(s?(empC?.dur||s.dur):30);}
+            setCustomDur(v=>!v);
+          }})
+        ),
+        customDur&&ce("div",null,
+          ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
+            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.max(5,v-5)),
+              style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
+            ce("div",{style:{fontSize:22,fontWeight:900,color:C.accent,minWidth:70,textAlign:"center"}},manualDur," min"),
+            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.min(480,v+5)),
+              style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
+          ),
+          ce("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap",justifyContent:"center"}},
+            [5,10,15,20,25,30,40,45,60,90,120].map(m=>
+              ce("button",{type:"button",key:m,onClick:()=>setManualDur(m),
+                style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(manualDur===m?C.accent:C.border),
+                  background:manualDur===m?C.accent+"22":"transparent",color:manualDur===m?C.accent:C.muted,
+                  fontSize:11,cursor:"pointer",fontWeight:manualDur===m?700:400}
+              },m+"m")
+            )
+          )
+        )
       ),
       blk&&tm2&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
         ce("b",{style:{fontSize:12,color:C.err,display:"block",marginBottom:10}},"🔒 Duración del bloqueo"),
