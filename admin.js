@@ -262,7 +262,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     if (staffUser?.lunchStart && staffUser?.lunchEnd) {
       const lStart = pt(staffUser.lunchStart);
       const lEnd   = pt(staffUser.lunchEnd);
-      if (slotStart < lEnd && slotEnd > lStart)
+      if (slotStart < lEnd && slotEnd >= lStart)
         return "⚠️ Ese horario invade el almuerzo de " + staffUser.name + " (" + staffUser.lunchStart + "–" + staffUser.lunchEnd + ").";
     }
     // Verificar bloqueo de día
@@ -843,7 +843,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   }
 
   // ── RENDER ──
-  return ce("div",{className:"app-main",style:{...S.app,display:"flex",flexDirection:"row",minHeight:"100vh"}},
+  return ce("div",{"data-taseca-auth":"1",className:"app-main",style:{...S.app,display:"flex",flexDirection:"row",minHeight:"100vh"}},
     // Sidebar
     ce("div",{className:"app-sidebar"},
       ce("div",{style:{padding:"18px 14px 14px",borderBottom:"1px solid "+C.border}},
