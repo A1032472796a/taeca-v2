@@ -292,6 +292,8 @@ export function App() {
     }
 
     async function checkNewAppts() {
+      // Solo notificar cuando hay un usuario autenticado
+      if (!document.querySelector("[data-taseca-auth]")) return;
       try {
         // Limpiar cache para traer datos frescos
         const ck = "taseca_cache_appointments_" + (window._companyId||"root");
