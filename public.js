@@ -26,9 +26,7 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
   }
 
   function puedeOperar(a) {
-    // Solo puede reagendar/cancelar si faltan más de 60 minutos
-    const apptDt = new Date(a.date + "T" + a.time + ":00");
-    return (apptDt - Date.now()) > 60 * 60 * 1000;
+    return true; // sin restricción de tiempo
   }
 
   function cancelarCita(a) {
@@ -45,6 +43,9 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
     const svc2  = svcs.find(sv => sv.name===a.svc) || null;
     setStf(staff);
     setSvc(svc2);
+    // Pre-llenar teléfono y nombre en step 4
+    window._gReagendarPhone = a.phone || gPhone;
+    window._gReagendarName  = a.client || "";
     setStep(3);
     setPtab("booking");
   }
@@ -89,7 +90,7 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
               ce("b",   { style:{ fontSize:14 } }, a.client || "—"),
               ce("div", { style:{ color:C.muted, fontSize:11, marginTop:2 } }, "✂️ ", a.svc||"—", " · 👨 ", staff?staff.name:"—"),
               ce("div", { style:{ color:C.accent, fontSize:12, fontWeight:700, marginTop:3 } }, "📆 ", a.date, " · ⏰ ", a.time),
-              !operable && !cancelled && ce("div", { style:{ fontSize:10, color:C.err, marginTop:3 } }, "⏰ Menos de 1h — ya no se puede modificar")
+
             ),
             ce("span", { style:{ background:col+"22", color:col, fontSize:10, padding:"3px 8px", borderRadius:20, fontWeight:700 } }, SL2[a.status]||a.status)
           ),
@@ -115,6 +116,14 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
   const [tm,   setTm]   = useState(null);
   const [nm,   setNm]   = useState("");
   const [ph,   setPh]   = useState("");
+
+  // Pre-llenar datos si viene de "Mis citas → Reagendar"
+  React.useEffect(() => {
+    if (window._gReagendarPhone) { setPh(window._gReagendarPhone); }
+    if (window._gReagendarName)  { setNm(window._gReagendarName);  }
+    window._gReagendarPhone = null;
+    window._gReagendarName  = null;
+  }, []);
   const [err,  setErr]  = useState("");
   const [clientFound, setClientFound] = useState(null);
   const [yr, setYr] = useState(new Date().getFullYear());
