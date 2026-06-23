@@ -359,9 +359,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(!blk&&!sv){setAe("Selecciona un servicio");return;}
       if(!wi&&!dt2){setAe("Selecciona una fecha");return;}
       if(!wi&&!tm2){setAe("Selecciona una hora");return;}
+      if(blk&&!dt2){setAe("Selecciona la fecha del bloqueo");return;}
+      if(blk&&!tm2){setAe("Selecciona la hora del bloqueo");return;}
       if(!sf){setAe("Selecciona un profesional");return;}
       // Validar conflictos (almuerzo + citas existentes + bloqueos)
-      if(!blk&&!wi&&tm2&&sf){
+      if(!wi&&tm2&&sf&&dt2){
         const svcObj3=svcs.find(s=>s.name===sv);
         const dur3=svcObj3?svcObj3.dur:30;
         const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
@@ -433,7 +435,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
       ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
       !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
-      !wi&&!blk&&ce(React.Fragment,null,
+      !wi&&ce(React.Fragment,null,
         ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
         ce("div",{style:{marginBottom:10}},
         ce("label",{style:S.lbl},"Hora"),
@@ -443,6 +445,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             if(!sf||!dt2) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
             const selU4=staffL.find(u=>u.id===sf);
             if(!selU4) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+            if(blk) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
             const svcObj4=svcs.find(s=>s.name===sv)||null;
             const dur4=svcObj4?svcObj4.dur:30;
             const wS=pt(selU4.wStart||"09:00"), wE=pt(selU4.wEnd||"19:00");
@@ -468,7 +471,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           })()
         )
       ),
-        ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
+        !blk&&ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
       ),
       blk&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"10px 12px",fontSize:12,color:C.err}},"🔒 Este slot quedará bloqueado."),
       ae&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:9,padding:"9px 12px",fontSize:12,color:C.err,marginTop:8}},"⚠️ ",ae),
