@@ -181,6 +181,252 @@ function Reportes({ appts, sales, clients, users, isAdmin, prodSales = [], prods
   );
 }
 
+// ─── APPT MDL (module-level: evita remount al re-renderizar Admin) ──────────
+function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,setNslot,checkConflict}){
+  const [wi,setWi]=useState(!d.id&&!d.date); const [blk,setBlk]=useState(false);
+  const [cn,setCn]=useState(d.client||""); const [sv,setSv]=useState(d.svc||"");
+  const [dt2,setDt2]=useState(d.date||""); const [tm2,setTm2]=useState(d.time||"");
+  const [st2,setSt2]=useState(d.status||"pendiente"); const [sf,setSf]=useState(d.stId||selSt||"");
+  const [aph,setAph]=useState(d.phone||""); const [aem,setAem]=useState(d.email||"");
+  const [ae,setAe]=useState(""); const [load2,setLoad2]=useState(false);
+  const [customDur,setCustomDur]=useState(false); const [manualDur,setManualDur]=useState(30);
+  const [blkDur,setBlkDur]=useState(15); // duración del bloqueo en minutos
+  const [clientFound3,setClientFound3]=useState(null);
+  function handleApptPhone(v){
+    const digits=v.replace(/\D/g,"").slice(0,10); setAph(digits);
+    if(digits.length===10){
+      const f=clients.find(c=>c.phone===digits);
+      if(f){setClientFound3(f);setCn(f.name);setAem(f.email||"");}
+      else setClientFound3(null);
+    } else setClientFound3(null);
+  }
+  async function save(){
+    setAe("");
+    if(!blk&&!cn){setAe("El nombre del cliente es obligatorio");return;}
+    if(!blk&&!sv){setAe("Selecciona un servicio");return;}
+    if(!wi&&!dt2){setAe("Selecciona una fecha");return;}
+    if(!wi&&!tm2){setAe("Selecciona una hora");return;}
+    if(blk&&!dt2){setAe("Selecciona la fecha del bloqueo");return;}
+    if(blk&&!tm2){setAe("Selecciona la hora del bloqueo");return;}
+    if(!sf){setAe("Selecciona un profesional");return;}
+    // Validar conflictos (almuerzo + citas existentes + bloqueos)
+    if(!wi&&tm2&&sf&&dt2){
+      const svcObj3=svcs.find(s=>s.name===sv);
+      const dur3=svcObj3?svcObj3.dur:30;
+      const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
+      if(conflict){setAe(conflict);return;}
+    }
+    setLoad2(true);
+    try {
+      const now2=new Date();
+      const svcObj=svcs.find(s=>s.name===sv)||null;
+      const selU2=staffL.find(u=>u.id===sf);
+      const empCfg=selU2?.svcsConfig?.[svcObj?.id];
+      // Si es cliente nuevo con teléfono, registrarlo automáticamente
+      if(aph&&aph.length===10&&!clientFound3&&cn){
+        const newCli={id:"c"+Date.now(),name:cn,phone:aph,email:aem,visits:0,last:"-",stamps:0,pts:0,since:today()};
+        setClients(x=>[...x,newCli]);
+        DB.save("clients",newCli.id,newCli).catch(()=>{});
+      } else if(clientFound3){
+        // Actualizar última visita
+        const upd={...clientFound3,visits:(clientFound3.visits||0)+1,last:today()};
+        setClients(x=>x.map(c=>c.id===clientFound3.id?upd:c));
+        DB.save("clients",clientFound3.id,upd).catch(()=>{});
+      }
+      const item={
+        id:d.id||"a"+Date.now(), client:cn, phone:aph, email:aem,
+        svc:sv, svcId:svcObj?.id||"",
+        svcPrice:empCfg?.price||(svcObj?.price||0), stId:sf,
+        date:wi?today():dt2,
+        time:wi?((now2.getHours()<10?"0":"")+now2.getHours()+":"+String(Math.floor(now2.getMinutes()/15)*15).padStart(2,"0")):tm2,
+        status:blk?"bloqueado":wi?"walk_in":st2,
+        dur:blk?blkDur:customDur?manualDur:(empCfg?.dur||(svcObj?.dur||30))
+      };
+      d.id?setAppts(x=>x.map(a=>a.id===d.id?item:a)):setAppts(x=>[...x,item]);
+      setMdl(null); setNslot(null);
+      await DB.save("appointments",item.id,item);
+    } catch(e){setAe("Error al guardar: "+e.message);}
+    setLoad2(false);
+  }
+  const selUser=staffL.find(u=>u.id===sf);
+  const svcOpts=(()=>{
+    const cfg2=selUser?.svcsConfig||{};
+    const hasCfg=Object.keys(cfg2).some(k=>cfg2[k]?.on);
+    if(!selUser||!hasCfg) return svcs.map(s=>({v:s.name,l:s.name+" — $"+s.price}));
+    return svcs.filter(s=>cfg2[s.id]?.on).map(s=>{const c2=cfg2[s.id];return {v:s.name,l:s.name+" — $"+(c2.price||s.price)};});
+  })();
+  return ce(Mdl,{title:wi?"⚡ Cliente sin cita":"Cita",close:()=>{setMdl(null);setNslot(null);},save},
+    ce("div",{style:{display:"flex",gap:8,marginBottom:11}},
+      ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(false);},style:{...S.btn(!wi&&!blk?"gold":"ghost"),flex:1,fontSize:12}},"📅 Con cita"),
+      ce("button",{type:"button",onClick:()=>{setWi(true);setBlk(false);},style:{...S.btn(wi?"cyan":"ghost"),flex:1,fontSize:12,color:wi?"#000":C.muted}},"⚡ Walk-in"),
+      ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(true);},style:{...S.btn(blk?"err":"ghost"),flex:1,fontSize:12,color:blk?"#fff":C.muted}},"🔒 Bloquear")
+    ),
+    !blk&&ce("div",{style:{marginBottom:10}},
+      ce("label",{style:S.lbl},"Teléfono (busca cliente automáticamente)"),
+      ce("div",{style:{position:"relative"}},
+        ce("input",{
+          style:{...S.inp,borderColor:aph.length>0?aph.length===10?C.ok:C.err:C.border},
+          type:"tel",placeholder:"3001234567 (opcional)",value:aph,
+          onChange:e2=>handleApptPhone(e2.target.value),
+          onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+        }),
+        aph.length>0&&ce("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:10,color:aph.length===10?C.ok:C.err,fontWeight:700}},aph.length+"/10")
+      )
+    ),
+    !blk&&clientFound3&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}},
+      ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},clientFound3.name[0]),
+      ce("div",null,ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ "+clientFound3.name),ce("div",{style:{fontSize:10,color:C.muted}},clientFound3.visits||0," visitas · ",clientFound3.stamps||0," sellos"))
+    ),
+    !blk&&!clientFound3&&aph.length===10&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"7px 12px",marginBottom:8,fontSize:11,color:C.warn}},"📋 Número nuevo — se registrará como cliente al guardar"),
+    !blk&&ce("div",{style:{marginBottom:10,position:"relative"}},
+      ce("label",{style:S.lbl},"Nombre completo *"),
+      ce("input",{
+        style:{...S.inp,borderColor:cn?C.ok:C.border},
+        placeholder:"Carlos Pérez", value:cn,
+        onChange:e2=>{
+          setCn(e2.target.value);
+          setClientFound3(null); // reset cuando escribe manualmente
+        },
+        onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+      }),
+      // Sugerencias de autocompletado por nombre
+      cn.length>=2&&!clientFound3&&ce("div",{style:{
+        position:"absolute",top:"100%",left:0,right:0,zIndex:50,
+        background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,
+        maxHeight:180,overflowY:"auto",boxShadow:"0 4px 16px #000a",marginTop:2
+      }},
+        (()=>{
+          const q=cn.toLowerCase().trim();
+          const matches=clients.filter(c=>
+            c.name.toLowerCase().includes(q) ||
+            (c.phone||"").includes(q)
+          ).slice(0,6);
+          if(!matches.length) return ce("div",{style:{padding:"10px 13px",color:C.muted,fontSize:12}},"Sin coincidencias");
+          return matches.map(c=>ce("div",{key:c.id,
+            onMouseDown:e2=>{
+              e2.preventDefault();
+              setCn(c.name);
+              setAph(c.phone||"");
+              setAem(c.email||"");
+              setClientFound3(c);
+            },
+            style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",
+              display:"flex",alignItems:"center",gap:9}
+          },
+            ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},c.name[0]),
+            ce("div",null,
+              ce("div",{style:{fontSize:12,fontWeight:700}},c.name),
+              ce("div",{style:{fontSize:10,color:C.muted}},c.phone||"",(c.visits?" · "+c.visits+" visitas":""))
+            )
+          ));
+        })()
+      )
+    ),
+    !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
+    ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
+    !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
+
+    !wi&&ce(React.Fragment,null,
+      ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
+      ce("div",{style:{marginBottom:10}},
+      ce("label",{style:S.lbl},"Hora"),
+      ce("select",{style:S.inp,value:tm2,onChange:e2=>setTm2(e2.target.value)},
+        ce("option",{value:""},"Seleccionar..."),
+        (()=>{
+          if(!sf||!dt2) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+          const selU4=staffL.find(u=>u.id===sf);
+          if(!selU4) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+          if(blk) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
+          const svcObj4=svcs.find(s=>s.name===sv)||null;
+          const dur4=svcObj4?svcObj4.dur:30;
+          const wS=pt(selU4.wStart||"09:00"), wE=pt(selU4.wEnd||"19:00");
+          const lS=selU4.lunchStart?pt(selU4.lunchStart):null;
+          const lE=selU4.lunchEnd?pt(selU4.lunchEnd):null;
+          // Citas del día del barbero (excluyendo la actual si edita)
+          const dayCitas=appts
+            .filter(a=>(a.stId||a.st_id)===sf&&a.date===dt2&&a.status!=="cancelado"&&a.status!=="bloqueado"&&a.id!==(d.id||null))
+            .map(a=>({start:pt(a.time),end:pt(a.time)+(a.dur||30)}));
+          if(lS!==null&&lE!==null) dayCitas.push({start:lS,end:lE});
+          dayCitas.sort((a,b)=>a.start-b.start);
+          // Slots disponibles continuos de 5min
+          const available=[];
+          let cursor=wS;
+          for(const blk of dayCitas){
+            let t=cursor;
+            while(t+dur4<=blk.start){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
+            cursor=Math.max(cursor,blk.end);
+          }
+          let t=cursor;
+          while(t+dur4<=wE){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
+          return available.map(s=>ce("option",{key:s,value:s},s));
+        })()
+      )
+    ),
+      !blk&&ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
+    ),
+    !blk&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"10px 13px",marginBottom:10,border:"1px solid "+C.border}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:customDur?10:0}},
+        ce("div",null,
+          ce("b",{style:{fontSize:12}},customDur?"⏱ Duración personalizada":"⏱ Duración del servicio"),
+          ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},
+            customDur ? manualDur+" min" : (()=>{const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];return s?(empC?.dur||s.dur)+" min":"30 min";})()
+          )
+        ),
+        ce(Toggle,{val:customDur,onChange:()=>{
+          if(!customDur){const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];setManualDur(s?(empC?.dur||s.dur):30);}
+          setCustomDur(v=>!v);
+        }})
+      ),
+      customDur&&ce("div",null,
+        ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
+          ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.max(5,v-5)),
+            style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
+          ce("div",{style:{fontSize:22,fontWeight:900,color:C.accent,minWidth:70,textAlign:"center"}},manualDur," min"),
+          ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.min(480,v+5)),
+            style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
+        ),
+        ce("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap",justifyContent:"center"}},
+          [5,10,15,20,25,30,40,45,60,90,120].map(m=>
+            ce("button",{type:"button",key:m,onClick:()=>setManualDur(m),
+              style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(manualDur===m?C.accent:C.border),
+                background:manualDur===m?C.accent+"22":"transparent",color:manualDur===m?C.accent:C.muted,
+                fontSize:11,cursor:"pointer",fontWeight:manualDur===m?700:400}
+            },m+"m")
+          )
+        )
+      )
+    ),
+    blk&&tm2&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
+      ce("b",{style:{fontSize:12,color:C.err,display:"block",marginBottom:10}},"🔒 Duración del bloqueo"),
+      ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center",marginBottom:8}},
+        ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.max(5,v-5)),
+          style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
+        ce("div",{style:{fontSize:22,fontWeight:900,color:C.err,minWidth:70,textAlign:"center"}},blkDur," min"),
+        ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.min(480,v+5)),
+          style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
+      ),
+      ce("div",{style:{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}},
+        [15,30,45,60,90,120].map(m=>
+          ce("button",{type:"button",key:m,onClick:()=>setBlkDur(m),
+            style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(blkDur===m?C.err:C.border),
+              background:blkDur===m?C.err+"22":"transparent",color:blkDur===m?C.err:C.muted,
+              fontSize:11,cursor:"pointer",fontWeight:blkDur===m?700:400}
+          },m+"m")
+        )
+      ),
+      tm2&&ce("div",{style:{fontSize:11,color:C.muted,textAlign:"center",marginTop:8}},
+        "Bloqueado: ",tm2," → ",(()=>{
+          const end=pt(tm2)+blkDur;
+          return (Math.floor(end/60)<10?"0":"")+Math.floor(end/60)+":"+String(end%60).padStart(2,"0");
+        })()
+      )
+    ),
+    blk&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"10px 12px",fontSize:12,color:C.err}},"🔒 Este slot quedará bloqueado."),
+    ae&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:9,padding:"9px 12px",fontSize:12,color:C.err,marginTop:8}},"⚠️ ",ae),
+    load2&&ce("div",{style:{textAlign:"center",fontSize:12,color:C.muted,marginTop:8}},"⏳ Guardando...")
+  );
+}
+
 // ─── ADMIN ───────────────────────────────────────────────────────
 export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, clients, setClients,
                         appts, setAppts, sales, setSales, prodSales = [], setProdSales = ()=>{},
@@ -333,252 +579,6 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       ce(Field,{label:"Email (opcional)",val:em,set:setEm,ph:"carlos@email.com",type:"email"}),
       ce(Field,{label:"Fecha de cumpleaños (opcional)",val:bd,set:setBd,type:"date"}),
       cerr&&ce("div",{style:{color:C.err,fontSize:12,marginBottom:8}},"⚠️ ",cerr)
-    );
-  }
-
-  function ApptMdl(){
-    const d=mdl?.d||nslot||{};
-    const [wi,setWi]=useState(!d.id&&!d.date); const [blk,setBlk]=useState(false);
-    const [cn,setCn]=useState(d.client||""); const [sv,setSv]=useState(d.svc||"");
-    const [dt2,setDt2]=useState(d.date||""); const [tm2,setTm2]=useState(d.time||"");
-    const [st2,setSt2]=useState(d.status||"pendiente"); const [sf,setSf]=useState(d.stId||selSt||"");
-    const [aph,setAph]=useState(d.phone||""); const [aem,setAem]=useState(d.email||"");
-    const [ae,setAe]=useState(""); const [load2,setLoad2]=useState(false);
-    const [customDur,setCustomDur]=useState(false); const [manualDur,setManualDur]=useState(30);
-    const [blkDur,setBlkDur]=useState(15); // duración del bloqueo en minutos
-    const [clientFound3,setClientFound3]=useState(null);
-    function handleApptPhone(v){
-      const digits=v.replace(/\D/g,"").slice(0,10); setAph(digits);
-      if(digits.length===10){
-        const f=clients.find(c=>c.phone===digits);
-        if(f){setClientFound3(f);setCn(f.name);setAem(f.email||"");}
-        else setClientFound3(null);
-      } else setClientFound3(null);
-    }
-    async function save(){
-      setAe("");
-      if(!blk&&!cn){setAe("El nombre del cliente es obligatorio");return;}
-      if(!blk&&!sv){setAe("Selecciona un servicio");return;}
-      if(!wi&&!dt2){setAe("Selecciona una fecha");return;}
-      if(!wi&&!tm2){setAe("Selecciona una hora");return;}
-      if(blk&&!dt2){setAe("Selecciona la fecha del bloqueo");return;}
-      if(blk&&!tm2){setAe("Selecciona la hora del bloqueo");return;}
-      if(!sf){setAe("Selecciona un profesional");return;}
-      // Validar conflictos (almuerzo + citas existentes + bloqueos)
-      if(!wi&&tm2&&sf&&dt2){
-        const svcObj3=svcs.find(s=>s.name===sv);
-        const dur3=svcObj3?svcObj3.dur:30;
-        const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
-        if(conflict){setAe(conflict);return;}
-      }
-      setLoad2(true);
-      try {
-        const now2=new Date();
-        const svcObj=svcs.find(s=>s.name===sv)||null;
-        const selU2=staffL.find(u=>u.id===sf);
-        const empCfg=selU2?.svcsConfig?.[svcObj?.id];
-        // Si es cliente nuevo con teléfono, registrarlo automáticamente
-        if(aph&&aph.length===10&&!clientFound3&&cn){
-          const newCli={id:"c"+Date.now(),name:cn,phone:aph,email:aem,visits:0,last:"-",stamps:0,pts:0,since:today()};
-          setClients(x=>[...x,newCli]);
-          DB.save("clients",newCli.id,newCli).catch(()=>{});
-        } else if(clientFound3){
-          // Actualizar última visita
-          const upd={...clientFound3,visits:(clientFound3.visits||0)+1,last:today()};
-          setClients(x=>x.map(c=>c.id===clientFound3.id?upd:c));
-          DB.save("clients",clientFound3.id,upd).catch(()=>{});
-        }
-        const item={
-          id:d.id||"a"+Date.now(), client:cn, phone:aph, email:aem,
-          svc:sv, svcId:svcObj?.id||"",
-          svcPrice:empCfg?.price||(svcObj?.price||0), stId:sf,
-          date:wi?today():dt2,
-          time:wi?((now2.getHours()<10?"0":"")+now2.getHours()+":"+String(Math.floor(now2.getMinutes()/15)*15).padStart(2,"0")):tm2,
-          status:blk?"bloqueado":wi?"walk_in":st2,
-          dur:blk?blkDur:customDur?manualDur:(empCfg?.dur||(svcObj?.dur||30))
-        };
-        d.id?setAppts(x=>x.map(a=>a.id===d.id?item:a)):setAppts(x=>[...x,item]);
-        setMdl(null); setNslot(null);
-        await DB.save("appointments",item.id,item);
-      } catch(e){setAe("Error al guardar: "+e.message);}
-      setLoad2(false);
-    }
-    const selUser=staffL.find(u=>u.id===sf);
-    const svcOpts=(()=>{
-      const cfg2=selUser?.svcsConfig||{};
-      const hasCfg=Object.keys(cfg2).some(k=>cfg2[k]?.on);
-      if(!selUser||!hasCfg) return svcs.map(s=>({v:s.name,l:s.name+" — $"+s.price}));
-      return svcs.filter(s=>cfg2[s.id]?.on).map(s=>{const c2=cfg2[s.id];return {v:s.name,l:s.name+" — $"+(c2.price||s.price)};});
-    })();
-    return ce(Mdl,{title:wi?"⚡ Cliente sin cita":"Cita",close:()=>{setMdl(null);setNslot(null);},save},
-      ce("div",{style:{display:"flex",gap:8,marginBottom:11}},
-        ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(false);},style:{...S.btn(!wi&&!blk?"gold":"ghost"),flex:1,fontSize:12}},"📅 Con cita"),
-        ce("button",{type:"button",onClick:()=>{setWi(true);setBlk(false);},style:{...S.btn(wi?"cyan":"ghost"),flex:1,fontSize:12,color:wi?"#000":C.muted}},"⚡ Walk-in"),
-        ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(true);},style:{...S.btn(blk?"err":"ghost"),flex:1,fontSize:12,color:blk?"#fff":C.muted}},"🔒 Bloquear")
-      ),
-      !blk&&ce("div",{style:{marginBottom:10}},
-        ce("label",{style:S.lbl},"Teléfono (busca cliente automáticamente)"),
-        ce("div",{style:{position:"relative"}},
-          ce("input",{
-            style:{...S.inp,borderColor:aph.length>0?aph.length===10?C.ok:C.err:C.border},
-            type:"tel",placeholder:"3001234567 (opcional)",value:aph,
-            onChange:e2=>handleApptPhone(e2.target.value),
-            onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
-          }),
-          aph.length>0&&ce("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:10,color:aph.length===10?C.ok:C.err,fontWeight:700}},aph.length+"/10")
-        )
-      ),
-      !blk&&clientFound3&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}},
-        ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},clientFound3.name[0]),
-        ce("div",null,ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ "+clientFound3.name),ce("div",{style:{fontSize:10,color:C.muted}},clientFound3.visits||0," visitas · ",clientFound3.stamps||0," sellos"))
-      ),
-      !blk&&!clientFound3&&aph.length===10&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"7px 12px",marginBottom:8,fontSize:11,color:C.warn}},"📋 Número nuevo — se registrará como cliente al guardar"),
-      !blk&&ce("div",{style:{marginBottom:10,position:"relative"}},
-        ce("label",{style:S.lbl},"Nombre completo *"),
-        ce("input",{
-          style:{...S.inp,borderColor:cn?C.ok:C.border},
-          placeholder:"Carlos Pérez", value:cn,
-          onChange:e2=>{
-            setCn(e2.target.value);
-            setClientFound3(null); // reset cuando escribe manualmente
-          },
-          onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
-        }),
-        // Sugerencias de autocompletado por nombre
-        cn.length>=2&&!clientFound3&&ce("div",{style:{
-          position:"absolute",top:"100%",left:0,right:0,zIndex:50,
-          background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,
-          maxHeight:180,overflowY:"auto",boxShadow:"0 4px 16px #000a",marginTop:2
-        }},
-          (()=>{
-            const q=cn.toLowerCase().trim();
-            const matches=clients.filter(c=>
-              c.name.toLowerCase().includes(q) ||
-              (c.phone||"").includes(q)
-            ).slice(0,6);
-            if(!matches.length) return ce("div",{style:{padding:"10px 13px",color:C.muted,fontSize:12}},"Sin coincidencias");
-            return matches.map(c=>ce("div",{key:c.id,
-              onMouseDown:e2=>{
-                e2.preventDefault();
-                setCn(c.name);
-                setAph(c.phone||"");
-                setAem(c.email||"");
-                setClientFound3(c);
-              },
-              style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",
-                display:"flex",alignItems:"center",gap:9}
-            },
-              ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},c.name[0]),
-              ce("div",null,
-                ce("div",{style:{fontSize:12,fontWeight:700}},c.name),
-                ce("div",{style:{fontSize:10,color:C.muted}},c.phone||"",(c.visits?" · "+c.visits+" visitas":""))
-              )
-            ));
-          })()
-        )
-      ),
-      !blk&&ce(Field,{label:"Email (opcional)",val:aem,set:setAem,ph:"carlos@email.com",type:"email"}),
-      ce(Field,{label:"Profesional",val:sf,set:v=>{setSf(v);setSv("");},opts:staffL.map(u=>({v:u.id,l:u.name}))}),
-      !blk&&ce(Field,{label:"Servicio",val:sv,set:setSv,opts:svcOpts}),
-
-      !wi&&ce(React.Fragment,null,
-        ce(Field,{label:"Fecha",val:dt2,set:setDt2,type:"date"}),
-        ce("div",{style:{marginBottom:10}},
-        ce("label",{style:S.lbl},"Hora"),
-        ce("select",{style:S.inp,value:tm2,onChange:e2=>setTm2(e2.target.value)},
-          ce("option",{value:""},"Seleccionar..."),
-          (()=>{
-            if(!sf||!dt2) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
-            const selU4=staffL.find(u=>u.id===sf);
-            if(!selU4) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
-            if(blk) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
-            const svcObj4=svcs.find(s=>s.name===sv)||null;
-            const dur4=svcObj4?svcObj4.dur:30;
-            const wS=pt(selU4.wStart||"09:00"), wE=pt(selU4.wEnd||"19:00");
-            const lS=selU4.lunchStart?pt(selU4.lunchStart):null;
-            const lE=selU4.lunchEnd?pt(selU4.lunchEnd):null;
-            // Citas del día del barbero (excluyendo la actual si edita)
-            const dayCitas=appts
-              .filter(a=>(a.stId||a.st_id)===sf&&a.date===dt2&&a.status!=="cancelado"&&a.status!=="bloqueado"&&a.id!==(d.id||null))
-              .map(a=>({start:pt(a.time),end:pt(a.time)+(a.dur||30)}));
-            if(lS!==null&&lE!==null) dayCitas.push({start:lS,end:lE});
-            dayCitas.sort((a,b)=>a.start-b.start);
-            // Slots disponibles continuos de 5min
-            const available=[];
-            let cursor=wS;
-            for(const blk of dayCitas){
-              let t=cursor;
-              while(t+dur4<=blk.start){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
-              cursor=Math.max(cursor,blk.end);
-            }
-            let t=cursor;
-            while(t+dur4<=wE){available.push((Math.floor(t/60)<10?"0":"")+Math.floor(t/60)+":"+String(t%60).padStart(2,"0"));t+=5;}
-            return available.map(s=>ce("option",{key:s,value:s},s));
-          })()
-        )
-      ),
-        !blk&&ce(Field,{label:"Estado",val:st2,set:setSt2,opts:[{v:"pendiente",l:"Pendiente"},{v:"confirmado",l:"Confirmado"}]})
-      ),
-      !blk&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"10px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:customDur?10:0}},
-          ce("div",null,
-            ce("b",{style:{fontSize:12}},customDur?"⏱ Duración personalizada":"⏱ Duración del servicio"),
-            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},
-              customDur ? manualDur+" min" : (()=>{const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];return s?(empC?.dur||s.dur)+" min":"30 min";})()
-            )
-          ),
-          ce(Toggle,{val:customDur,onChange:()=>{
-            if(!customDur){const s=svcs.find(x=>x.name===sv);const selU5=staffL.find(u=>u.id===sf);const empC=selU5?.svcsConfig?.[s?.id];setManualDur(s?(empC?.dur||s.dur):30);}
-            setCustomDur(v=>!v);
-          }})
-        ),
-        customDur&&ce("div",null,
-          ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
-            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.max(5,v-5)),
-              style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
-            ce("div",{style:{fontSize:22,fontWeight:900,color:C.accent,minWidth:70,textAlign:"center"}},manualDur," min"),
-            ce("button",{type:"button",onClick:()=>setManualDur(v=>Math.min(480,v+5)),
-              style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
-          ),
-          ce("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap",justifyContent:"center"}},
-            [5,10,15,20,25,30,40,45,60,90,120].map(m=>
-              ce("button",{type:"button",key:m,onClick:()=>setManualDur(m),
-                style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(manualDur===m?C.accent:C.border),
-                  background:manualDur===m?C.accent+"22":"transparent",color:manualDur===m?C.accent:C.muted,
-                  fontSize:11,cursor:"pointer",fontWeight:manualDur===m?700:400}
-              },m+"m")
-            )
-          )
-        )
-      ),
-      blk&&tm2&&ce("div",{style:{background:"#1a2230",borderRadius:11,padding:"12px 13px",marginBottom:10,border:"1px solid "+C.border}},
-        ce("b",{style:{fontSize:12,color:C.err,display:"block",marginBottom:10}},"🔒 Duración del bloqueo"),
-        ce("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center",marginBottom:8}},
-          ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.max(5,v-5)),
-            style:{width:36,height:36,borderRadius:9,border:"none",background:C.err+"22",color:C.err,fontSize:18,fontWeight:900,cursor:"pointer"}},"-"),
-          ce("div",{style:{fontSize:22,fontWeight:900,color:C.err,minWidth:70,textAlign:"center"}},blkDur," min"),
-          ce("button",{type:"button",onClick:()=>setBlkDur(v=>Math.min(480,v+5)),
-            style:{width:36,height:36,borderRadius:9,border:"none",background:C.ok+"22",color:C.ok,fontSize:18,fontWeight:900,cursor:"pointer"}},"+")
-        ),
-        ce("div",{style:{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}},
-          [15,30,45,60,90,120].map(m=>
-            ce("button",{type:"button",key:m,onClick:()=>setBlkDur(m),
-              style:{padding:"4px 8px",borderRadius:8,border:"1px solid "+(blkDur===m?C.err:C.border),
-                background:blkDur===m?C.err+"22":"transparent",color:blkDur===m?C.err:C.muted,
-                fontSize:11,cursor:"pointer",fontWeight:blkDur===m?700:400}
-            },m+"m")
-          )
-        ),
-        tm2&&ce("div",{style:{fontSize:11,color:C.muted,textAlign:"center",marginTop:8}},
-          "Bloqueado: ",tm2," → ",(()=>{
-            const end=pt(tm2)+blkDur;
-            return (Math.floor(end/60)<10?"0":"")+Math.floor(end/60)+":"+String(end%60).padStart(2,"0");
-          })()
-        )
-      ),
-      blk&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"10px 12px",fontSize:12,color:C.err}},"🔒 Este slot quedará bloqueado."),
-      ae&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"55",borderRadius:9,padding:"9px 12px",fontSize:12,color:C.err,marginTop:8}},"⚠️ ",ae),
-      load2&&ce("div",{style:{textAlign:"center",fontSize:12,color:C.muted,marginTop:8}},"⏳ Guardando...")
     );
   }
 
@@ -1311,7 +1311,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     mdl?.type==="prod"   && ce(ProdMdl,null),
     mdl?.type==="client" && ce(CliMdl,null),
     mdl?.type==="user"   && ce(UserMdl,null),
-    (mdl?.type==="appt"||mdl?.type==="walkin"||nslot) && ce(ApptMdl,null),
+    (mdl?.type==="appt"||mdl?.type==="walkin"||nslot) && ce(ApptMdl,{d:mdl?.d||nslot||{},clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,setNslot,checkConflict}),
     mdl?.type==="sale"   && ce(SaleMdl,null),
     abonoMdl && ce(AbonoMdl,null),
     // Appt detail
