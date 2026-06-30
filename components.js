@@ -47,7 +47,7 @@ export function Field({ label, val, set, opts, type, ph }) {
 }
 
 // ─── MODAL ───────────────────────────────────────────────────────
-export function Mdl({ title, close, save, saveLabel, children }) {
+export function Mdl({ title, close, save, saveLabel, saveDisabled, children }) {
   return ce("div", { style: S.ov, onClick: close },
     ce("div", { style: S.mb, onClick: e => e.stopPropagation(),
                 onKeyDown: e => { if (e.key === "Enter") e.stopPropagation(); } },
@@ -59,7 +59,10 @@ export function Mdl({ title, close, save, saveLabel, children }) {
       children,
       ce("div", { style: { display:"flex", gap:10, marginTop:8 } },
         ce("button", { type:"button", style:{ ...S.btn("ghost"), flex:1 }, onClick:close }, "Cancelar"),
-        ce("button", { type:"button", style:{ ...S.btn(),        flex:2 }, onClick:save  }, saveLabel || "Guardar")
+        ce("button", { type:"button", disabled: !!saveDisabled,
+                       style:{ ...S.btn(), flex:2, opacity: saveDisabled ? 0.5 : 1, cursor: saveDisabled ? "not-allowed" : "pointer" },
+                       onClick: saveDisabled ? undefined : save },
+          saveDisabled ? "⏳ Guardando..." : (saveLabel || "Guardar"))
       )
     )
   );

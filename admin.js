@@ -189,6 +189,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
   const [st2,setSt2]=useState(d.status||"pendiente"); const [sf,setSf]=useState(d.stId||selSt||"");
   const [aph,setAph]=useState(d.phone||""); const [aem,setAem]=useState(d.email||"");
   const [ae,setAe]=useState(""); const [load2,setLoad2]=useState(false);
+  const savingRef=useRef(false);
   const [customDur,setCustomDur]=useState(false); const [manualDur,setManualDur]=useState(30);
   const [blkDur,setBlkDur]=useState(15); // duración del bloqueo en minutos
   const [clientFound3,setClientFound3]=useState(null);
@@ -201,6 +202,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
     } else setClientFound3(null);
   }
   async function save(){
+    if(savingRef.current) return;
     setAe("");
     if(!blk&&!cn){setAe("El nombre del cliente es obligatorio");return;}
     if(!blk&&!sv){setAe("Selecciona un servicio");return;}
@@ -216,6 +218,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
       const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
       if(conflict){setAe(conflict);return;}
     }
+    savingRef.current=true;
     setLoad2(true);
     try {
       const now2=new Date();
@@ -247,6 +250,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
       await DB.save("appointments",item.id,item);
     } catch(e){setAe("Error al guardar: "+e.message);}
     setLoad2(false);
+    savingRef.current=false;
   }
   const selUser=staffL.find(u=>u.id===sf);
   const svcOpts=(()=>{
@@ -255,7 +259,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
     if(!selUser||!hasCfg) return svcs.map(s=>({v:s.name,l:s.name+" — $"+s.price}));
     return svcs.filter(s=>cfg2[s.id]?.on).map(s=>{const c2=cfg2[s.id];return {v:s.name,l:s.name+" — $"+(c2.price||s.price)};});
   })();
-  return ce(Mdl,{title:wi?"⚡ Cliente sin cita":"Cita",close:()=>{setMdl(null);setNslot(null);},save},
+  return ce(Mdl,{title:wi?"⚡ Cliente sin cita":"Cita",close:()=>{setMdl(null);setNslot(null);},save,saveDisabled:load2},
     ce("div",{style:{display:"flex",gap:8,marginBottom:11}},
       ce("button",{type:"button",onClick:()=>{setWi(false);setBlk(false);},style:{...S.btn(!wi&&!blk?"gold":"ghost"),flex:1,fontSize:12}},"📅 Con cita"),
       ce("button",{type:"button",onClick:()=>{setWi(true);setBlk(false);},style:{...S.btn(wi?"cyan":"ghost"),flex:1,fontSize:12,color:wi?"#000":C.muted}},"⚡ Walk-in"),
