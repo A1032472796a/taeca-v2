@@ -214,7 +214,9 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
     // Validar conflictos (almuerzo + citas existentes + bloqueos)
     if(!wi&&tm2&&sf&&dt2){
       const svcObj3=svcs.find(s=>s.name===sv);
-      const dur3=svcObj3?svcObj3.dur:30;
+      const selU3=staffL.find(u=>u.id===sf);
+      const empCfg3=selU3?.svcsConfig?.[svcObj3?.id];
+      const dur3=blk?blkDur:customDur?manualDur:(empCfg3?.dur||(svcObj3?.dur||30));
       const conflict=checkConflict(sf, dt2, tm2, dur3, d.id||null);
       if(conflict){setAe(conflict);return;}
     }
@@ -342,7 +344,8 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
           if(!selU4) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
           if(blk) return SLOTS.map(s=>ce("option",{key:s,value:s},s));
           const svcObj4=svcs.find(s=>s.name===sv)||null;
-          const dur4=svcObj4?svcObj4.dur:30;
+          const empCfg4=selU4?.svcsConfig?.[svcObj4?.id];
+          const dur4=customDur?manualDur:(empCfg4?.dur||(svcObj4?.dur||30));
           const wS=pt(selU4.wStart||"09:00"), wE=pt(selU4.wEnd||"19:00");
           const lS=selU4.lunchStart?pt(selU4.lunchStart):null;
           const lE=selU4.lunchEnd?pt(selU4.lunchEnd):null;
