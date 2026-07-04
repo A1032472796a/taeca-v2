@@ -438,8 +438,7 @@ function ApptMdl({d,clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,s
 export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, clients, setClients,
                         appts, setAppts, sales, setSales, prodSales = [], setProdSales = ()=>{},
                         cfg, setCfg, onLogout }) {
-  if (!user) return null;
-  const isAdmin   = user.role === "admin";
+  const isAdmin   = user?.role === "admin";
   const stampsOn  = cfg?.stampsOn;
 
   // ── Tabs ──
@@ -463,7 +462,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   });
 
   const [tab,      setTab]      = useState(tabs[0]?.id || "agenda");
-  const [sub,      setSub]      = useState(user.role==="vendedor"?"productos":"servicios");
+  const [sub,      setSub]      = useState(user?.role==="vendedor"?"productos":"servicios");
   const [cajSub,   setCajSub]   = useState("servicios");
   const [cajFilt,  setCajFilt]  = useState("todas");
   const [mdl,      setMdl]      = useState(null);
@@ -478,11 +477,12 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [notifs,   setNotifs]   = useState([]);
   const [showN,    setShowN]    = useState(false);
   const staffL = users.filter(u=>u.role==="barbero"||u.role==="tatuador");
-  const initSt = isAdmin ? null : user.id; // Admin: Todos por defecto
+  const initSt = isAdmin ? null : user?.id; // Admin: Todos por defecto
   const [selSt, setSelSt] = useState(initSt);
 
   // ── Notify check ──
   useEffect(()=>{
+    if (!user) return;
     if (user.role!=="admin"&&user.role!=="recepcionista") return;
     const lastCheck = localStorage.getItem("taseca_lnc")||"0";
     async function checkN(){
@@ -494,6 +494,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     }
     checkN(); const iv=setInterval(checkN,60000); return ()=>clearInterval(iv);
   },[]);
+
+  // Guard movido AQUÍ (después de los hooks) para no violar las
+  // reglas de hooks de React. Antes estaba al inicio de la función,
+  // lo que remontaba todo el árbol y expulsaba la sesión.
+  if (!user) return null;
 
 
   // ─── VALIDACIÓN CENTRAL DE CONFLICTOS ────────────────────────
