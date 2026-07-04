@@ -10,7 +10,7 @@ import { SuperLogin, SuperAdmin } from "./superadmin.js";
 import { Public } from "./public.js";
 import { Admin  } from "./admin.js";
 
-const { createElement: ce, useState, useEffect, useCallback } = React;
+const { createElement: ce, useState, useEffect, useCallback, useRef } = React;
 
 // ─── LOGIN ───────────────────────────────────────────────────────
 const MAX_ATTEMPTS = 5;
@@ -153,6 +153,10 @@ export function App() {
   const [prodSales, setProdSales] = useState([]);
   const [cfg,       setCfg]       = useState(DEF_CFG);
 
+  // IDs de citas ya conocidas (para notificaciones). Se usa ref y NO
+  // estado para no depender de un closure viejo ni forzar re-renders.
+  const knownApptIds = useRef(null);
+
   const init = useCallback(async () => {
     try {
       let u = await DB.all("users");
@@ -245,9 +249,6 @@ export function App() {
 
   // ─── NOTIFICACIONES: polling cada 30s para citas nuevas ─────────
   useEffect(() => {
-    // Guardar IDs conocidos al arrancar
-    const knownIds = new Set(appts.map(a => a.id));
-
     function showApptNotif(a) {
       const staffName = users.find(u => u.id === (a.stId||a.st_id))?.name || "Tu profesional";
       const title     = "📅 Nueva cita — " + (a.client || "Cliente");
@@ -298,24 +299,36 @@ export function App() {
         // Limpiar cache para traer datos frescos
         const ck = "taseca_cache_appointments_" + (window._companyId||"root");
         try { localStorage.removeItem(ck); } catch {}
-        delete window._memCache?.[ck];
+        if (window._memCache) delete window._memCache[ck];
 
         const fresh = await DB.all("appointments");
-        const newOnes = fresh.filter(a => !knownIds.has(a.id));
+
+        // Primera pasada: solo memoriza los IDs actuales. NO notifica
+        // y NO toca el estado → no remonta la app ni saca la sesión.
+        if (knownApptIds.current === null) {
+          knownApptIds.current = new Set(fresh.map(a => a.id));
+          return;
+        }
+
+        const newOnes = fresh.filter(a => !knownApptIds.current.has(a.id));
+        if (newOnes.length === 0) return; // nada nuevo → no tocar estado
+
         newOnes.forEach(a => {
-          knownIds.add(a.id);
+          knownApptIds.current.add(a.id);
           showApptNotif(a);
         });
-        if (newOnes.length > 0) {
-          setAppts(fresh);
-        }
+
+        // Añade SOLO las nuevas, sin reemplazar toda la lista de golpe
+        // (evita el re-render que expulsaba la sesión).
+        setAppts(prev => {
+          const ids = new Set(prev.map(a => a.id));
+          const add = newOnes.filter(a => !ids.has(a.id));
+          return add.length ? [...prev, ...add] : prev;
+        });
       } catch(e) {
         console.warn("[Taseca] notif check error:", e.message);
       }
     }
-
-    // Inicializar knownIds con las citas actuales
-    appts.forEach(a => knownIds.add(a.id));
 
     const iv = setInterval(checkNewAppts, 30000); // cada 30 segundos
     return () => clearInterval(iv);
@@ -323,8 +336,16 @@ export function App() {
 
   // ─── AUTO-REFRESH cada 5 minutos ─────────────────────────────
   useEffect(() => {
+    function sameList(a, b) {
+      if (a.length !== b.length) return false;
+      const ida = a.map(x => x.id).sort().join(",");
+      const idb = b.map(x => x.id).sort().join(",");
+      return ida === idb;
+    }
+
     async function refresh() {
       if (!window._companyId && window._companySlug) return; // aún no inicializado
+      if (!document.querySelector("[data-taseca-auth]")) return; // sin sesión, no refrescar
       try {
         // Limpiar cache para forzar datos frescos
         ["appointments","clients","sales","product_sales"].forEach(t => {
@@ -337,10 +358,11 @@ export function App() {
           DB.all("sales"),
           DB.all("product_sales")
         ]);
-        setAppts(newAppts);
-        setClients(newClients);
-        setSales(newSales);
-        setProdSales(newProdSales);
+        // Actualiza cada estado SOLO si cambió (evita re-renders vacíos)
+        setAppts(prev     => sameList(prev, newAppts)     ? prev : newAppts);
+        setClients(prev   => sameList(prev, newClients)   ? prev : newClients);
+        setSales(prev     => sameList(prev, newSales)     ? prev : newSales);
+        setProdSales(prev => sameList(prev, newProdSales) ? prev : newProdSales);
         console.log("[Taseca] Auto-refresh ✓", new Date().toLocaleTimeString("es"));
       } catch(e) {
         console.warn("[Taseca] Auto-refresh error:", e.message);
