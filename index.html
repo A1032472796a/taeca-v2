@@ -45,26 +45,45 @@
   link.href = URL.createObjectURL(blob);
   document.head.appendChild(link);
 
+<!-- Reemplaza el bloque "2. Service Worker" dentro del primer <script> de index.html por esto -->
+
   // 2. Service Worker — solo si hay empresa (slug)
   if ("serviceWorker" in navigator && slug) {
     navigator.serviceWorker.register("/sw.js")
       .then(function(reg) {
         console.log("[Taseca] SW registrado ✓");
-        // Enviar slug al SW para que lo recuerde
+
         function sendSlug(sw) {
-          sw.postMessage({ type: "SET_SLUG", slug: slug });
+          if (sw) sw.postMessage({ type: "SET_SLUG", slug: slug });
         }
-        if (reg.active)    sendSlug(reg.active);
-        if (reg.installing) reg.installing.addEventListener("statechange", function() {
-          if (this.state === "activated") sendSlug(this);
-        });
-        navigator.serviceWorker.ready.then(function(r) {
-          if (r.active) sendSlug(r.active);
+        if (reg.active) sendSlug(reg.active);
+        navigator.serviceWorker.ready.then(function(r) { sendSlug(r.active); });
+
+        // Cuando haya una versión nueva, NO recargar solo.
+        // Se activa únicamente cuando el usuario lo pida.
+        reg.addEventListener("updatefound", function() {
+          var nuevo = reg.installing;
+          if (!nuevo) return;
+          nuevo.addEventListener("statechange", function() {
+            if (nuevo.state === "installed" && navigator.serviceWorker.controller) {
+              console.log("[Taseca] Nueva versión lista (esperando).");
+              // Opcional: mostrar un banner y en su botón llamar:
+              // nuevo.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
         });
       })
       .catch(function(e) {
         console.warn("[Taseca] SW error:", e.message);
       });
+
+    // Recargar SOLO tras un skipWaiting explícito del usuario.
+    var _recargando = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function() {
+      if (_recargando) return;
+      _recargando = true;
+      window.location.reload();
+    });
   }
 })();
 </script>
