@@ -451,7 +451,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     {id:"reportes", icon:"📊", label:"Reportes"},
     {id:"config",   icon:"⚙️", label:"Config"}
   ];
-  const allowed     = RTABS[user.role] || [];
+  const allowed     = RTABS[user?.role] || [];
   const companyMods = window._companyModules || null;
   const MOD_MAP     = { fidelidad:"sellos", catalogo:"catalogo", caja:"caja", reportes:"reportes" };
   const tabs = allTabs.filter(t => {
