@@ -157,6 +157,44 @@ export function App() {
   // estado para no depender de un closure viejo ni forzar re-renders.
   const knownApptIds = useRef(null);
 
+  // ── SESIÓN PERSISTENTE (7 días) ──────────────────────────────
+  // Guarda el usuario logueado para no volver a pedir PIN al reabrir.
+  // Solo se cierra con "Salir". Guarda id/rol, NO el PIN.
+  const SESSION_KEY = "taseca_session_" + (window._companySlug || "root");
+  const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 días en ms
+
+  function saveSession(u) {
+    if (!u) return;
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ id: u.id, t: Date.now() }));
+    } catch {}
+  }
+  function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+  }
+  function readSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || !s.id) return null;
+      if (Date.now() - s.t > SESSION_TTL) { clearSession(); return null; } // expiró
+      return s.id;
+    } catch { return null; }
+  }
+  // Inicia sesión y la persiste
+  function doLogin(u) {
+    setUser(u);
+    saveSession(u);
+    setScr("admin");
+  }
+  // Cierra sesión y borra lo guardado
+  function doLogout() {
+    clearSession();
+    setUser(null);
+    setScr("public");
+  }
+
   const init = useCallback(async () => {
     try {
       let u = await DB.all("users");
@@ -190,6 +228,20 @@ export function App() {
         await DB.save("config", defCfg.id, defCfg);
       }
       setScr("public");
+
+      // ── Restaurar sesión persistente (si existe y no expiró) ──
+      // Se revalida contra la lista actual de usuarios: si el usuario
+      // fue borrado o cambiado, la sesión vieja no da acceso.
+      const savedId = readSession();
+      if (savedId) {
+        const savedUser = u.find(x => String(x.id) === String(savedId));
+        if (savedUser) {
+          setUser(savedUser);
+          setScr("admin");
+        } else {
+          clearSession(); // usuario ya no existe
+        }
+      }
     } catch (e) {
       console.error(e);
       setScr("public");
@@ -379,8 +431,8 @@ export function App() {
   if (scr === "loading")    return ce(LoadingScreen, null);
   if (scr === "superlogin") return ce(SuperLogin, { onLogin:()=>setScr("superadmin"), onBack:()=>setScr("public") });
   if (scr === "superadmin") return ce(SuperAdmin, { onLogout:()=>setScr("public") });
-  if (scr === "login")      return ce(Login,      { users, onLogin:u=>{ setUser(u); setScr("admin"); }, onBack:()=>setScr("public") });
-  if (scr === "admin")      return ce(Admin,       { ...sharedProps, user, onLogout:()=>{ setUser(null); setScr("public"); } });
+  if (scr === "login")      return ce(Login,      { users, onLogin:doLogin, onBack:()=>setScr("public") });
+  if (scr === "admin")      return ce(Admin,       { ...sharedProps, user, onLogout:doLogout });
 
   return ce(Public, {
     ...sharedProps,
