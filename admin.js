@@ -757,6 +757,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     const [cl,setCl]=useState(""); const [ph,setPh]=useState(""); const [mt,setMt]=useState("efectivo");
     const [dp,setDp]=useState(""); const [selProds,setSelProds]=useState([]); const [search,setSearch]=useState("");
     const [showList,setShowList]=useState(false); const [err2,setErr2]=useState(""); const [clientFound2,setClientFound2]=useState(null);
+    const [internal,setInternal]=useState(false); // venta interna a barbero
     const total=selProds.reduce((a,x)=>a+x.price*x.qty,0);
     const filteredProds=prods.filter(pr=>!search||pr.name.toLowerCase().includes(search.toLowerCase()));
     function handlePhone(v){
@@ -775,6 +776,10 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       setSearch(""); setShowList(false);
     }
     function changeQty(id,delta){setSelProds(prev=>prev.map(x=>x.id!==id?x:x.qty+delta<=0?null:{...x,qty:x.qty+delta}).filter(Boolean));}
+    function changePrice(id,val){
+      const n=Math.max(0,Number(val)||0);
+      setSelProds(prev=>prev.map(x=>x.id===id?{...x,price:n}:x));
+    }
     async function save(){
       setErr2("");
       if(!cl.trim()){setErr2("Nombre del cliente obligatorio");return;}
@@ -782,7 +787,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(mt==="debe"&&!dp){setErr2("Selecciona fecha de pago");return;}
       const item={id:"v"+Date.now(),client:cl.trim(),phone:ph,
         items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
-        total,method:mt,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
+        total,method:mt,internal,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
       setProdSales(x=>[...x,item]); closeM();
       try{
         await DB.save("product_sales",item.id,item);
@@ -812,7 +817,16 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           ),
           selProds.length>0&&ce("div",{style:{background:"#0d1520",border:"1px solid "+C.border,borderRadius:11,padding:8,marginTop:8}},
             selProds.map(x=>ce("div",{key:x.id,style:{display:"flex",alignItems:"center",gap:7,marginBottom:5,background:C.card,borderRadius:8,padding:"6px 9px"}},
-              ce("div",{style:{flex:1}},ce("span",{style:{fontSize:12,fontWeight:700}},x.name),ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price)),
+              ce("div",{style:{flex:1}},
+                ce("span",{style:{fontSize:12,fontWeight:700}},x.name),
+                internal
+                  ? ce("span",{style:{display:"inline-flex",alignItems:"center",gap:3,marginLeft:7}},
+                      ce("span",{style:{fontSize:11,color:C.cyan}},"$"),
+                      ce("input",{type:"number",value:x.price,onChange:e2=>changePrice(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
+                        style:{width:70,background:"#0d1520",border:"1px solid "+C.cyan+"55",borderRadius:6,color:C.cyan,fontSize:11,padding:"3px 6px",fontWeight:700}})
+                    )
+                  : ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price)
+              ),
               ce("div",{style:{display:"flex",alignItems:"center",gap:3}},
                 ce("button",{type:"button",onClick:()=>changeQty(x.id,-1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"−"),
                 ce("span",{style:{fontSize:12,fontWeight:700,minWidth:16,textAlign:"center"}},x.qty),
@@ -823,6 +837,15 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             )),
             ce("div",{style:{display:"flex",justifyContent:"space-between",borderTop:"1px solid "+C.border,paddingTop:7,marginTop:3}},
               ce("b",{style:{fontSize:13,color:C.muted}},"Total"),ce("b",{style:{fontSize:18,color:C.accent}},"$",total))
+          )
+        ),
+        ce("div",{style:{marginBottom:10,background:internal?C.cyan+"18":C.card,border:"1px solid "+(internal?C.cyan+"55":C.border),borderRadius:11,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"},onClick:()=>setInternal(v=>!v)},
+          ce("div",null,
+            ce("div",{style:{fontSize:12,fontWeight:700,color:internal?C.cyan:C.text}},"🔧 Venta interna (barbero)"),
+            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},"Permite editar el precio de cada producto")
+          ),
+          ce("div",{style:{width:42,height:24,borderRadius:20,background:internal?C.cyan:C.border,position:"relative",transition:"all .2s",flexShrink:0}},
+            ce("div",{style:{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:internal?21:3,transition:"all .2s"}})
           )
         ),
         ce("div",{style:{marginBottom:10}},
@@ -1194,13 +1217,16 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               ))
             ),
             cajSub==="productos"&&ce("div",null,
-              ce("div",{style:{display:"flex",gap:5,marginBottom:12,overflowX:"auto"}},
+              ce("div",{style:{display:"flex",gap:5,marginBottom:8,overflowX:"auto"}},
                 [["todas","Todas"],["debe","⏳ Deudas"],["pagadas","✅ Pagadas"]].map(([id,lbl])=>
                   ce("button",{type:"button",key:id,onClick:()=>setCajFilt(id),style:{...S.btn(cajFilt===id?"gold":"ghost"),padding:"5px 11px",fontSize:11,color:cajFilt===id?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0}},lbl)
                 )
               ),
+              ce("input",{style:{...S.inp,marginBottom:12},placeholder:"🔍 Buscar por nombre de cliente...",value:cliSearch,onChange:e2=>setCliSearch(e2.target.value)}),
               ce("div",{className:"desktop-2col"},
-                (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"):cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"):prodSales).map(s=>{
+                (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"):cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"):prodSales)
+                  .filter(s=>!cliSearch||(s.client||"").toLowerCase().includes(cliSearch.toLowerCase()))
+                  .map(s=>{
                   const isDebt=s.method==="debe";
                   const abonos3=s.abonos||[];
                   const totalAb3=abonos3.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
@@ -1210,6 +1236,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                     ce("div",{style:S.row},
                       ce("div",{style:{flex:1,minWidth:0}},
                         ce("b",{style:{fontSize:12}},s.client),
+                        s.internal&&ce("span",{style:{...S.badge(C.cyan),marginLeft:6,fontSize:9}},"🔧 Interna"),
                         s.phone&&ce("div",{style:{color:C.muted,fontSize:10}},"📞 ",s.phone),
                         ce("div",{style:{color:C.muted,fontSize:10,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))
                       ),
