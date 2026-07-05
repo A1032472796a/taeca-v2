@@ -811,6 +811,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             onChange:e2=>{ setCl(e2.target.value); setClientFound2(null); },
             onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
           }),
+          // DEBUG temporal: muestra estado del autocompletado
+          cl.length>=1&&ce("div",{style:{fontSize:10,color:C.warn,marginTop:3,padding:"4px 8px",background:C.warn+"18",borderRadius:6}},
+            "🔍 DEBUG: clients="+(clients?clients.length:"undefined")+" | escrito='"+cl+"' | coincidencias="+
+            (clients?clients.filter(c=>c.name.toLowerCase().includes(cl.toLowerCase().trim())||(c.phone||"").includes(cl.trim())).length:"?")
+          ),
           // Autocompletado por nombre — en flujo (no absolute) para que
           // no lo recorte el overflow/scroll del modal.
           cl.length>=2&&!clientFound2&&(()=>{
