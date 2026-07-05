@@ -5,6 +5,19 @@ import { Logo, Field, PhoneInput, StampCard, PtsBar } from "./components.js";
 
 const { createElement: ce, useState, useEffect } = React;
 
+// Convierte "14:00" (24h) a "2:00 PM" (12h) SOLO para mostrar al usuario.
+// El valor interno guardado en la BD sigue siendo 24h ("14:00").
+function to12h(hhmm) {
+  if (!hhmm || typeof hhmm !== "string" || hhmm.indexOf(":") < 0) return hhmm || "";
+  const parts = hhmm.split(":");
+  const h = Number(parts[0]);
+  const m = parts[1] != null ? parts[1] : "00";
+  if (isNaN(h)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return h12 + ":" + String(m).padStart(2, "0") + " " + period;
+}
+
 
 // ─── GESTIONAR MIS CITAS ─────────────────────────────────────────
 function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) {
@@ -90,7 +103,7 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
             ce("div", null,
               ce("b",   { style:{ fontSize:14 } }, a.client || "—"),
               ce("div", { style:{ color:C.muted, fontSize:11, marginTop:2 } }, "✂️ ", a.svc||"—", " · 👨 ", staff?staff.name:"—"),
-              ce("div", { style:{ color:C.accent, fontSize:12, fontWeight:700, marginTop:3 } }, "📆 ", a.date, " · ⏰ ", a.time),
+              ce("div", { style:{ color:C.accent, fontSize:12, fontWeight:700, marginTop:3 } }, "📆 ", a.date, " · ⏰ ", to12h(a.time)),
 
             ),
             ce("span", { style:{ background:col+"22", color:col, fontSize:10, padding:"3px 8px", borderRadius:20, fontWeight:700 } }, SL2[a.status]||a.status)
@@ -98,7 +111,7 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
           operable && ce("div", { style:{ display:"flex", gap:8 } },
             ce("button", { type:"button", style:{ ...S.btn("gold"), flex:1, fontSize:11, color:"#000", padding:"8px" }, onClick:()=>reagendarCita(a) }, "📅 Reagendar"),
             ce("button", { type:"button", style:{ ...S.btn("err"),  flex:1, fontSize:11, padding:"8px" },
-              onClick:()=>{ if(confirm("¿Cancelar esta cita de "+a.svc+" el "+a.date+" a las "+a.time+"?")) cancelarCita(a); }
+              onClick:()=>{ if(confirm("¿Cancelar esta cita de "+a.svc+" el "+a.date+" a las "+to12h(a.time)+"?")) cancelarCita(a); }
             }, "✕ Cancelar")
           )
         );
@@ -316,7 +329,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
             avSlots.m.map(sl=>ce("div",{key:sl,onClick:()=>setTm(sl),
               style:{padding:"7px 3px",borderRadius:7,border:"1px solid "+(tm===sl?C.accent:C.border),
                      background:tm===sl?C.accent+"22":"transparent",color:tm===sl?C.accent:C.muted,
-                     cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},sl))
+                     cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},to12h(sl)))
           )
         ),
         avSlots.a.length>0&&ce("div",null,
@@ -325,7 +338,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
             avSlots.a.map(sl=>ce("div",{key:sl,onClick:()=>setTm(sl),
               style:{padding:"7px 3px",borderRadius:7,border:"1px solid "+(tm===sl?C.accent:C.border),
                      background:tm===sl?C.accent+"22":"transparent",color:tm===sl?C.accent:C.muted,
-                     cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},sl))
+                     cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},to12h(sl)))
           )
         )
       ),
@@ -367,7 +380,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     return ce("div",null,
       ce("b",{style:{fontSize:14,color:C.accent,display:"block",marginBottom:11}},"Tus datos"),
       ce("div",{style:{...S.card,border:"1px solid "+C.accent+"44",marginBottom:13}},
-        [["Servicio",svc?.name||""],["Profesional",stf?.name||""],["Fecha",dt?dt.getDate()+" de "+MO[dt.getMonth()]:""],["Hora",tm||""]].map(([k,v])=>
+        [["Servicio",svc?.name||""],["Profesional",stf?.name||""],["Fecha",dt?dt.getDate()+" de "+MO[dt.getMonth()]:""],["Hora",tm?to12h(tm):""]].map(([k,v])=>
           ce("div",{key:k,style:{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}},
             ce("span",{style:{color:C.muted}},k),ce("b",{style:{color:k==="Hora"?C.accent:C.text}},v))
         )
@@ -500,7 +513,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
                 ? ce("div",{style:{color:C.muted,textAlign:"center",padding:14,fontSize:12}},"Sin citas")
                 : loyAppts.map(a=>ce("div",{key:a.id,style:{...S.card,marginBottom:7}},
                     ce("div",{style:S.row},
-                      ce("div",null,ce("b",{style:{fontSize:12}},a.svc),ce("div",{style:{color:C.muted,fontSize:11}},a.date," · ",a.time)),
+                      ce("div",null,ce("b",{style:{fontSize:12}},a.svc),ce("div",{style:{color:C.muted,fontSize:11}},a.date," · ",to12h(a.time))),
                       ce("span",{style:S.badge(SC[a.status]||C.muted)},a.status)
                     )
                   ))
