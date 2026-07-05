@@ -803,7 +803,53 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           ce("input",{style:S.inp,type:"tel",placeholder:"3001234567",value:ph,onChange:e2=>handlePhone(e2.target.value),onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}})
         ),
         clientFound2&&ce("div",{style:{background:C.ok+"18",border:"1px solid "+C.ok+"44",borderRadius:9,padding:"9px 12px",marginBottom:10}},ce("div",{style:{fontWeight:700,fontSize:12,color:C.ok}},"✓ ",clientFound2.name)),
-        ce(Field,{label:"Nombre del cliente",val:cl,set:setCl,ph:"Carlos Perez"}),
+        ce("div",{style:{marginBottom:10,position:"relative"}},
+          ce("label",{style:S.lbl},"Nombre del cliente"),
+          ce("input",{
+            style:{...S.inp,borderColor:cl?C.ok:C.border},
+            placeholder:"Carlos Perez", value:cl,
+            onChange:e2=>{ setCl(e2.target.value); setClientFound2(null); },
+            onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
+          }),
+          // Autocompletado por nombre (como en Walk-in)
+          cl.length>=2&&!clientFound2&&ce("div",{style:{
+            position:"absolute",top:"100%",left:0,right:0,zIndex:60,
+            background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,
+            maxHeight:180,overflowY:"auto",boxShadow:"0 4px 16px #000a",marginTop:2
+          }},
+            (()=>{
+              const q=cl.toLowerCase().trim();
+              const matches=clients.filter(c=>
+                c.name.toLowerCase().includes(q) || (c.phone||"").includes(q)
+              ).slice(0,6);
+              if(!matches.length) return ce("div",{style:{padding:"10px 13px",color:C.muted,fontSize:12}},"Sin coincidencias — se registrará como nuevo");
+              return matches.map(c=>ce("div",{key:c.id,
+                onMouseDown:e2=>{
+                  e2.preventDefault();
+                  setCl(c.name);
+                  setPh(c.phone||"");
+                  setClientFound2(c);
+                },
+                style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",display:"flex",alignItems:"center",gap:9}
+              },
+                ce("div",{style:{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+","+C.cyan+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",flexShrink:0}},c.name[0]),
+                ce("div",null,
+                  ce("div",{style:{fontSize:12,fontWeight:700}},c.name),
+                  ce("div",{style:{fontSize:10,color:C.muted}},c.phone||"",(c.visits?" · "+c.visits+" visitas":""))
+                )
+              ));
+            })()
+          )
+        ),
+        ce("div",{style:{marginBottom:10,background:internal?C.cyan+"18":C.card,border:"1px solid "+(internal?C.cyan+"55":C.border),borderRadius:11,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"},onClick:()=>setInternal(v=>!v)},
+          ce("div",null,
+            ce("div",{style:{fontSize:12,fontWeight:700,color:internal?C.cyan:C.text}},"🔧 Venta interna (barbero)"),
+            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},internal?"Edita el precio de cada producto abajo 👇":"Actívalo para poner precios especiales")
+          ),
+          ce("div",{style:{width:42,height:24,borderRadius:20,background:internal?C.cyan:C.border,position:"relative",transition:"all .2s",flexShrink:0}},
+            ce("div",{style:{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:internal?21:3,transition:"all .2s"}})
+          )
+        ),
         ce("div",{style:{marginBottom:10}},
           ce("label",{style:S.lbl},"Productos"),
           ce("div",{style:{position:"relative"}},
@@ -820,10 +866,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               ce("div",{style:{flex:1}},
                 ce("span",{style:{fontSize:12,fontWeight:700}},x.name),
                 internal
-                  ? ce("span",{style:{display:"inline-flex",alignItems:"center",gap:3,marginLeft:7}},
-                      ce("span",{style:{fontSize:11,color:C.cyan}},"$"),
+                  ? ce("div",{style:{display:"flex",alignItems:"center",gap:4,marginTop:3}},
+                      ce("span",{style:{fontSize:9,color:C.cyan}},"Precio interno:"),
+                      ce("span",{style:{fontSize:12,color:C.cyan,fontWeight:700}},"$"),
                       ce("input",{type:"number",value:x.price,onChange:e2=>changePrice(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
-                        style:{width:70,background:"#0d1520",border:"1px solid "+C.cyan+"55",borderRadius:6,color:C.cyan,fontSize:11,padding:"3px 6px",fontWeight:700}})
+                        style:{width:80,background:"#0d1520",border:"1.5px solid "+C.cyan,borderRadius:6,color:C.cyan,fontSize:12,padding:"4px 7px",fontWeight:700}})
                     )
                   : ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price)
               ),
@@ -837,15 +884,6 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             )),
             ce("div",{style:{display:"flex",justifyContent:"space-between",borderTop:"1px solid "+C.border,paddingTop:7,marginTop:3}},
               ce("b",{style:{fontSize:13,color:C.muted}},"Total"),ce("b",{style:{fontSize:18,color:C.accent}},"$",total))
-          )
-        ),
-        ce("div",{style:{marginBottom:10,background:internal?C.cyan+"18":C.card,border:"1px solid "+(internal?C.cyan+"55":C.border),borderRadius:11,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"},onClick:()=>setInternal(v=>!v)},
-          ce("div",null,
-            ce("div",{style:{fontSize:12,fontWeight:700,color:internal?C.cyan:C.text}},"🔧 Venta interna (barbero)"),
-            ce("div",{style:{fontSize:10,color:C.muted,marginTop:2}},"Permite editar el precio de cada producto")
-          ),
-          ce("div",{style:{width:42,height:24,borderRadius:20,background:internal?C.cyan:C.border,position:"relative",transition:"all .2s",flexShrink:0}},
-            ce("div",{style:{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:internal?21:3,transition:"all .2s"}})
           )
         ),
         ce("div",{style:{marginBottom:10}},
