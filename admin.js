@@ -811,19 +811,19 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             onChange:e2=>{ setCl(e2.target.value); setClientFound2(null); },
             onKeyDown:e2=>{if(e2.key==="Enter")e2.preventDefault();}
           }),
-          // Autocompletado por nombre (como en Walk-in)
-          cl.length>=2&&!clientFound2&&ce("div",{style:{
-            position:"absolute",top:"100%",left:0,right:0,zIndex:60,
-            background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,
-            maxHeight:180,overflowY:"auto",boxShadow:"0 4px 16px #000a",marginTop:2
-          }},
-            (()=>{
-              const q=cl.toLowerCase().trim();
-              const matches=clients.filter(c=>
-                c.name.toLowerCase().includes(q) || (c.phone||"").includes(q)
-              ).slice(0,6);
-              if(!matches.length) return ce("div",{style:{padding:"10px 13px",color:C.muted,fontSize:12}},"Sin coincidencias — se registrará como nuevo");
-              return matches.map(c=>ce("div",{key:c.id,
+          // Autocompletado por nombre — en flujo (no absolute) para que
+          // no lo recorte el overflow/scroll del modal.
+          cl.length>=2&&!clientFound2&&(()=>{
+            const q=cl.toLowerCase().trim();
+            const matches=clients.filter(c=>
+              c.name.toLowerCase().includes(q) || (c.phone||"").includes(q)
+            ).slice(0,6);
+            if(!matches.length) return null;
+            return ce("div",{style:{
+              background:"#1a2230",border:"1px solid "+C.cyan+"55",borderRadius:10,
+              maxHeight:180,overflowY:"auto",marginTop:4
+            }},
+              matches.map(c=>ce("div",{key:c.id,
                 onMouseDown:e2=>{
                   e2.preventDefault();
                   setCl(c.name);
@@ -837,9 +837,9 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                   ce("div",{style:{fontSize:12,fontWeight:700}},c.name),
                   ce("div",{style:{fontSize:10,color:C.muted}},c.phone||"",(c.visits?" · "+c.visits+" visitas":""))
                 )
-              ));
-            })()
-          )
+              ))
+            );
+          })()
         ),
         ce("div",{style:{marginBottom:10,background:internal?C.cyan+"18":C.card,border:"1px solid "+(internal?C.cyan+"55":C.border),borderRadius:11,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"},onClick:()=>setInternal(v=>!v)},
           ce("div",null,
