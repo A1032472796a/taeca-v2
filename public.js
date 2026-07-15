@@ -226,8 +226,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
       const upd = { ...clientFound, visits:(clientFound.visits||0)+1, last:today() };
       onReg(upd); try { await DB.save("clients", upd.id, upd); } catch {}
     }
-    onBook(a); setStep(5);
-    try { await DB.save("appointments", a.id, a); } catch(e){ console.error(e); }
+    try { await DB.save("appointments", a.id, a); } catch (e) { console.error(e); setErr("No se pudo agendar la cita. Intenta de nuevo en unos segundos."); return; } onBook(a); setStep(5);
     scheduleReminder(a, cliData, stf?stf.name:"Tu profesional");
   }
 
