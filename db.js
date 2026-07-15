@@ -117,9 +117,9 @@ export const DB = {
     const noOrder = ["config","company","push_subscriptions","product_sales","notifs"];
     let url = window.SB_URL + "/rest/v1/" + c + "?select=*" + (!noOrder.includes(c) ? "&order=created_at.asc" : "");
     if (SB.co(c) && window._companyId) url += "&company_id=eq." + window._companyId;
-    const r = await fetch(url, { headers: SB.h() });
-    if (!r.ok) throw new Error("DB.all " + c + ": " + r.status + " " + await r.text());
-    const res = (await r.json()).map(o => fromDb(c, o));
+    let _out = []; let _from = 0; const _PAGE = 1000; while (true) { const _r = await fetch(url, { headers: { ...SB.h(), "Range-Unit": "items", "Range": _from + "-" + (_from + _PAGE - 1) } }); if (!_r.ok) throw new Error("DB.all " + c + ": " + _r.status + " " + await _r.text()); const _page = await _r.json(); _out = _out.concat(_page); if (_page.length < _PAGE) break; _from += _PAGE; } const res = _out.map(o => fromDb(c, o));
+    
+    
     if (["services","products","config"].includes(c)) cacheSet(ck, res);
     return res;
   },
