@@ -47,7 +47,7 @@ function Reportes({ appts, sales, clients, users, isAdmin, prodSales = [], prods
   const bd = [0,0,0,0,0,0,0]; fa.forEach(a=>{ if(a.date) bd[new Date(a.date).getDay()]++; });
   const md = Math.max(...bd,1);
 
-  const fps      = prodSales.filter(s=>pf(s.date));
+  const fps      = prodSales.filter(s=>pf(s.date)&&!s.anulado);
   const ingProd  = fps.reduce((a,s)=>a+s.total,0);
   const porCob   = fps.filter(s=>s.method==="debe").reduce((a,s)=>a+Math.max(0,s.pendiente||0),0);
   const deudas   = fps.filter(s=>s.method==="debe"&&(s.pendiente||0)>0).length;
@@ -470,6 +470,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [adet,     setAdet]     = useState(null);
   const [nslot,    setNslot]    = useState(null);
   const [abonoMdl,    setAbonoMdl]    = useState(null);
+  const [editSaleMdl, setEditSaleMdl] = useState(null); // pedido de productos en edición
+  const [anularConfirm, setAnularConfirm] = useState(null); // id de pedido pendiente de confirmar anulación
   const [reschedMdl,  setReschedMdl]  = useState(null); // cita a reagendar
   const [prodSearch,setProdSearch] = useState("");
   const [cliSearch, setCliSearch]  = useState("");
@@ -787,6 +789,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(mt==="debe"&&!dp){setErr2("Selecciona fecha de pago");return;}
       const item={id:"v"+Date.now(),client:cl.trim(),phone:ph,
         items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
+        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty})),
         total,method:mt,internal,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
       setProdSales(x=>[...x,item]); closeM();
       try{
@@ -904,6 +907,113 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         ce("div",{style:{display:"flex",gap:10,marginTop:4}},
           ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:closeM},"Cancelar"),
           ce("button",{type:"button",style:{...S.btn("gold"),flex:2,color:"#000"},onClick:save},"Guardar venta")
+        )
+      )
+    );
+  }
+
+  // ─── EDITAR PEDIDO DE PRODUCTOS (agregar/quitar productos respetando stock) ──
+  function EditSaleMdl(){
+    if(!editSaleMdl) return null;
+    const s=editSaleMdl;
+    const original=s.lineItems||[]; // cantidades ya descontadas del stock para este pedido
+    const [selProds,setSelProds]=useState(original.map(x=>({...x})));
+    const [search,setSearch]=useState(""); const [showList,setShowList]=useState(false); const [errE,setErrE]=useState("");
+    const noDetail = original.length===0 && (s.items||[]).length>0;
+    const total=selProds.reduce((a,x)=>a+x.price*x.qty,0);
+    const filteredProds=prods.filter(pr=>!search||pr.name.toLowerCase().includes(search.toLowerCase()));
+    function availStock(pr){
+      const orig=original.find(o=>o.id===pr.id);
+      return (pr.stock||0)+(orig?orig.qty:0); // stock actual ya tiene descontado lo de este pedido
+    }
+    function addProd(pr){
+      const stock=availStock(pr);
+      setSelProds(prev=>{
+        const ex=prev.find(x=>x.id===pr.id);
+        const curQty=ex?ex.qty:0;
+        if(curQty+1>stock){setErrE("Stock insuficiente: "+stock);return prev;}
+        if(ex) return prev.map(x=>x.id===pr.id?{...x,qty:x.qty+1}:x);
+        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1}];
+      });
+      setErrE(""); setSearch(""); setShowList(false);
+    }
+    function changeQty(id,delta){
+      setSelProds(prev=>prev.map(x=>{
+        if(x.id!==id) return x;
+        const pr=prods.find(p=>p.id===id);
+        const stock=pr?availStock(pr):x.qty;
+        const nq=x.qty+delta;
+        if(nq<=0) return null;
+        if(delta>0&&nq>stock){setErrE("Stock insuficiente: "+stock);return x;}
+        return {...x,qty:nq};
+      }).filter(Boolean));
+    }
+    async function save(){
+      setErrE("");
+      if(selProds.length===0){setErrE("El pedido debe tener al menos un producto");return;}
+      const abonos=s.abonos||[]; const totalAb=abonos.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
+      const isDebt=s.method==="debe";
+      const newPend=isDebt?Math.max(0,total-totalAb):0;
+      const upd={...s,
+        items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
+        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty})),
+        total,pendiente:newPend
+      };
+      setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));
+      setEditSaleMdl(null);
+      try{
+        await DB.save("product_sales",upd.id,upd);
+        // Ajustar stock: delta = nueva cantidad - cantidad original de este pedido
+        const deltas={};
+        selProds.forEach(x=>{deltas[x.id]=(deltas[x.id]||0)-x.qty;});
+        original.forEach(o=>{deltas[o.id]=(deltas[o.id]||0)+o.qty;});
+        setProds(prev=>prev.map(pr=>{
+          if(!deltas[pr.id]) return pr;
+          const upd2={...pr,stock:Math.max(0,(pr.stock||0)+deltas[pr.id])};
+          DB.save("products",pr.id,upd2).catch(()=>{});
+          return upd2;
+        }));
+      }catch(e2){console.error(e2);}
+    }
+    return ce("div",{style:S.ov,onClick:()=>setEditSaleMdl(null)},
+      ce("div",{style:S.mb,onClick:e2=>e2.stopPropagation()},
+        ce("div",{style:{...S.row,marginBottom:14}},
+          ce("b",{style:{fontSize:15,color:C.accent}},"✏️ Editar productos — ",s.client),
+          ce("button",{type:"button",onClick:()=>setEditSaleMdl(null),style:{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}},"✕")
+        ),
+        noDetail&&ce("div",{style:{background:C.warn+"18",border:"1px solid "+C.warn+"44",borderRadius:9,padding:"8px 11px",marginBottom:10,fontSize:11,color:C.warn}},
+          "⚠️ Este pedido es anterior a esta función y no tiene guardado el detalle por producto. Los productos originales (",(s.items||[]).join(", "),") no se pueden editar ni afectan el stock; solo lo que agregues aquí se descontará."
+        ),
+        ce("div",{style:{marginBottom:10,position:"relative"}},
+          ce("label",{style:S.lbl},"Agregar producto"),
+          ce("input",{style:S.inp,placeholder:"Buscar producto...",value:search,onChange:e2=>{setSearch(e2.target.value);setShowList(true);},onFocus:()=>setShowList(true),onBlur:()=>setTimeout(()=>setShowList(false),200)}),
+          showList&&ce("div",{style:{background:"#1a2230",border:"1px solid "+C.border,borderRadius:10,marginTop:4,maxHeight:200,overflowY:"auto",position:"relative",zIndex:50}},
+            filteredProds.length===0&&ce("div",{style:{padding:12,textAlign:"center",color:C.muted,fontSize:12}},"Sin productos"),
+            filteredProds.map(pr=>ce("div",{key:pr.id,onMouseDown:()=>addProd(pr),style:{padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid "+C.border+"44",display:"flex",justifyContent:"space-between"}},
+              ce("span",{style:{fontSize:13}},pr.name),ce("b",{style:{color:C.accent}},"$",pr.price," · 📦",availStock(pr))
+            ))
+          )
+        ),
+        selProds.length>0&&ce("div",{style:{background:"#0d1520",border:"1px solid "+C.border,borderRadius:11,padding:8,marginBottom:10}},
+          selProds.map(x=>ce("div",{key:x.id,style:{display:"flex",alignItems:"center",gap:7,marginBottom:5,background:C.card,borderRadius:8,padding:"6px 9px"}},
+            ce("div",{style:{flex:1}},ce("span",{style:{fontSize:12,fontWeight:700}},x.name),ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price)),
+            ce("div",{style:{display:"flex",alignItems:"center",gap:3}},
+              ce("button",{type:"button",onClick:()=>changeQty(x.id,-1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"−"),
+              ce("span",{style:{fontSize:12,fontWeight:700,minWidth:16,textAlign:"center"}},x.qty),
+              ce("button",{type:"button",onClick:()=>changeQty(x.id,1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"+")
+            ),
+            ce("b",{style:{color:C.accent,fontSize:12,minWidth:44,textAlign:"right"}},"$",x.price*x.qty),
+            ce("button",{type:"button",onClick:()=>setSelProds(p=>p.filter(sp=>sp.id!==x.id))
+              ,style:{background:"none",border:"none",color:C.err,cursor:"pointer"}},"✕")
+          )),
+          ce("div",{style:{display:"flex",justifyContent:"space-between",borderTop:"1px solid "+C.border,paddingTop:7,marginTop:3}},
+            ce("b",{style:{fontSize:13,color:C.muted}},"Total nuevo"),ce("b",{style:{fontSize:18,color:C.accent}},"$",total))
+        ),
+        s.method==="debe"&&ce("div",{style:{fontSize:11,color:C.muted,marginBottom:10}},"El saldo pendiente se recalculará según lo ya abonado ($",(s.abonos||[]).reduce((a,ab)=>a+(Number(ab.monto)||0),0),")."),
+        errE&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:8}},"⚠️ ",errE),
+        ce("div",{style:{display:"flex",gap:10,marginTop:4}},
+          ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>setEditSaleMdl(null)},"Cancelar"),
+          ce("button",{type:"button",style:{...S.btn("gold"),flex:2,color:"#000"},onClick:save},"Guardar cambios")
         )
       )
     );
@@ -1261,13 +1371,16 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
             ),
             cajSub==="productos"&&ce("div",null,
               ce("div",{style:{display:"flex",gap:5,marginBottom:8,overflowX:"auto"}},
-                [["todas","Todas"],["debe","⏳ Deudas"],["pagadas","✅ Pagadas"]].map(([id,lbl])=>
+                [["todas","Todas"],["debe","⏳ Deudas"],["pagadas","✅ Pagadas"],["anuladas","🚫 Anuladas"]].map(([id,lbl])=>
                   ce("button",{type:"button",key:id,onClick:()=>setCajFilt(id),style:{...S.btn(cajFilt===id?"gold":"ghost"),padding:"5px 11px",fontSize:11,color:cajFilt===id?"#000":C.muted,whiteSpace:"nowrap",flexShrink:0}},lbl)
                 )
               ),
               ce("input",{style:{...S.inp,marginBottom:12},placeholder:"🔍 Buscar por nombre de cliente...",value:cliSearch,onChange:e2=>setCliSearch(e2.target.value)}),
               ce("div",{className:"desktop-2col"},
-                (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"):cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"):prodSales)
+                (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"&&!s.anulado)
+                  :cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"&&!s.anulado)
+                  :cajFilt==="anuladas"?prodSales.filter(s=>s.anulado)
+                  :prodSales.filter(s=>!s.anulado))
                   .filter(s=>!cliSearch||(s.client||"").toLowerCase().includes(cliSearch.toLowerCase()))
                   .map(s=>{
                   const isDebt=s.method==="debe";
@@ -1275,28 +1388,29 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                   const totalAb3=abonos3.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
                   const pend2=isDebt?(s.pendiente!==undefined?Number(s.pendiente):Math.max(0,s.total-totalAb3)):0;
                   const isVencida=isDebt&&s.dueDate&&s.dueDate<today();
-                  return ce("div",{key:s.id,style:{...S.card,border:"1px solid "+(isVencida?C.err+"66":isDebt?C.warn+"55":C.border)}},
+                  return ce("div",{key:s.id,style:{...S.card,border:"1px solid "+(s.anulado?C.err+"44":isVencida?C.err+"66":isDebt?C.warn+"55":C.border),opacity:s.anulado?0.6:1}},
                     ce("div",{style:S.row},
                       ce("div",{style:{flex:1,minWidth:0}},
-                        ce("b",{style:{fontSize:12}},s.client),
+                        ce("b",{style:{fontSize:12,textDecoration:s.anulado?"line-through":"none"}},s.client),
+                        s.anulado&&ce("span",{style:{...S.badge(C.err),marginLeft:6,fontSize:9}},"🚫 Anulado"),
                         s.internal&&ce("span",{style:{...S.badge(C.cyan),marginLeft:6,fontSize:9}},"🔧 Interna"),
                         s.phone&&ce("div",{style:{color:C.muted,fontSize:10}},"📞 ",s.phone),
                         ce("div",{style:{color:C.muted,fontSize:10,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},(s.items||[]).join(", "))
                       ),
                       ce("div",{style:{textAlign:"right",flexShrink:0,marginLeft:8}},
                         // Si hay deuda mostrar pendiente grande y total pequeño
-                        isDebt
+                        isDebt&&!s.anulado
                           ? ce("div",null,
                               ce("b",{style:{color:isVencida?C.err:C.warn,fontSize:16,display:"block"}},"$",pend2),
                               ce("div",{style:{fontSize:9,color:C.muted}},"de $",s.total," total"),
                               totalAb3>0&&ce("div",{style:{fontSize:9,color:C.ok}},"✓ Abonado: $",totalAb3)
                             )
                           : ce("b",{style:{color:C.accent,fontSize:13}},"$",s.total),
-                        ce("div",{style:{marginTop:3}},ce("span",{style:S.badge(isVencida?C.err:isDebt?C.warn:C.ok)},isVencida?"🚨 Vencido":isDebt?"⏳ Debe":s.method))
+                        ce("div",{style:{marginTop:3}},ce("span",{style:S.badge(s.anulado?C.err:isVencida?C.err:isDebt?C.warn:C.ok)},s.anulado?"Anulado":isVencida?"🚨 Vencido":isDebt?"⏳ Debe":s.method))
                       )
                     ),
                     // Barra de progreso de pago
-                    isDebt&&totalAb3>0&&ce("div",{style:{margin:"7px 0 4px"}},
+                    isDebt&&!s.anulado&&totalAb3>0&&ce("div",{style:{margin:"7px 0 4px"}},
                       ce("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:3}},
                         ce("span",null,"Pagado: $",totalAb3),
                         ce("span",null,"Pendiente: ",ce("b",{style:{color:isVencida?C.err:C.warn}},"$",pend2))
@@ -1307,9 +1421,10 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                     ),
                     ce("div",{style:{marginTop:4,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}},
                       ce("span",{style:{color:C.muted,fontSize:10}},"📆 ",s.date),
-                      isDebt&&s.dueDate&&ce("span",{style:{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}},isVencida?"🚨 Vencido:":"Límite:"," ",s.dueDate)
+                      isDebt&&!s.anulado&&s.dueDate&&ce("span",{style:{color:isVencida?C.err:C.warn,fontSize:10,fontWeight:700}},isVencida?"🚨 Vencido:":"Límite:"," ",s.dueDate),
+                      s.anulado&&ce("span",{style:{color:C.err,fontSize:10}},"Anulado el ",s.anuladoFecha," por ",s.anuladoPor||"—")
                     ),
-                    (isDebt&&(isAdmin||user.role==="vendedor"))&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
+                    !s.anulado&&(isDebt&&(isAdmin||user.role==="vendedor"))&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
                       ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"7px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn},onClick:()=>setAbonoMdl({...s,_table:"product_sales"})},"💵 Abonar"),
                       ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"7px",fontSize:11,color:"#000"},onClick:()=>{
                         const upd={...s,method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0};
@@ -1327,6 +1442,37 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                           onClick:()=>window.open("https://wa.me/"+waPhone+"?text="+encodeURIComponent(msg),"_blank")
                         },"📱 WA");
                       })()
+                    ),
+                    !s.anulado&&(isAdmin||user.role==="vendedor")&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
+                      ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"7px",fontSize:11},onClick:()=>setEditSaleMdl(s)},"➕ Agregar/editar productos"),
+                      isAdmin&&ce("button",{type:"button",style:{...S.btn("err"),flex:1,padding:"7px",fontSize:11},onClick:()=>setAnularConfirm(s.id)},"🗑️ Anular pedido")
+                    ),
+                    !s.anulado&&anularConfirm===s.id&&ce("div",{style:{marginTop:8,background:C.err+"18",border:"1px solid "+C.err+"55",borderRadius:10,padding:"9px 11px"}},
+                      ce("div",{style:{fontSize:11,color:C.err,fontWeight:700,marginBottom:4}},"¿Anular este pedido?"),
+                      ce("div",{style:{fontSize:10,color:C.muted,marginBottom:8}},
+                        (s.lineItems||[]).length>0
+                          ? "Se devolverán al inventario: "+(s.lineItems||[]).map(li=>li.name+" x"+li.qty).join(", ")+". Esta acción no se puede deshacer."
+                          : "⚠️ Este pedido no tiene detalle de productos guardado, así que no se podrá restaurar stock automáticamente. Esta acción no se puede deshacer."
+                      ),
+                      ce("div",{style:{display:"flex",gap:8}},
+                        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"6px",fontSize:11},onClick:()=>setAnularConfirm(null)},"Cancelar"),
+                        ce("button",{type:"button",style:{...S.btn("err"),flex:1,padding:"6px",fontSize:11},onClick:()=>{
+                          const lis=s.lineItems||[];
+                          if(lis.length){
+                            setProds(prev=>prev.map(pr=>{
+                              const li=lis.find(x=>x.id===pr.id);
+                              if(!li) return pr;
+                              const upd2={...pr,stock:(pr.stock||0)+li.qty};
+                              DB.save("products",pr.id,upd2).catch(()=>{});
+                              return upd2;
+                            }));
+                          }
+                          const upd={...s,anulado:true,anuladoFecha:today(),anuladoPor:user.name,pendiente:0};
+                          setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));
+                          DB.save("product_sales",upd.id,upd).catch(()=>{});
+                          setAnularConfirm(null);
+                        }},"Sí, anular")
+                      )
                     )
                   );
                 })
@@ -1396,6 +1542,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     (mdl?.type==="appt"||mdl?.type==="walkin"||nslot) && ce(ApptMdl,{d:mdl?.d||nslot||{},clients,setClients,svcs,staffL,selSt,appts,setAppts,setMdl,setNslot,checkConflict}),
     mdl?.type==="sale"   && ce(SaleMdl,null),
     abonoMdl && ce(AbonoMdl,null),
+    editSaleMdl && ce(EditSaleMdl,null),
     // Appt detail
     adet && ce("div",{style:S.ov,onClick:()=>setAdet(null)},
       ce("div",{style:S.mb,onClick:e2=>e2.stopPropagation()},
