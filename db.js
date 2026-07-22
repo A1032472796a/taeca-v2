@@ -43,6 +43,9 @@ export function toDb(c, o) {
     if (d.paidDate !== undefined) { d.paid_date = d.paidDate; delete d.paidDate; }
     if (d.abonos   !== undefined) d.abonos = Array.isArray(d.abonos) ? d.abonos : [];
     if (d.pendiente !== undefined && d.pendiente !== null) d.pendiente = Number(d.pendiente);
+    if (d.lineItems   !== undefined) { d.line_items   = d.lineItems;   delete d.lineItems;   }
+    if (d.anuladoFecha!== undefined) { d.anulado_fecha= d.anuladoFecha;delete d.anuladoFecha;}
+    if (d.anuladoPor  !== undefined) { d.anulado_por  = d.anuladoPor;  delete d.anuladoPor;  }
   }
   return d;
 }
@@ -69,6 +72,9 @@ export function fromDb(c, o) {
   if (c === "sales" || c === "product_sales") {
     if (d.due_date  !== undefined) { d.dueDate  = d.due_date;  delete d.due_date;  }
     if (d.paid_date !== undefined) { d.paidDate = d.paid_date; delete d.paid_date; }
+    if (d.line_items    !== undefined) { d.lineItems   = d.line_items;    delete d.line_items;    }
+    if (d.anulado_fecha !== undefined) { d.anuladoFecha = d.anulado_fecha; delete d.anulado_fecha; }
+    if (d.anulado_por   !== undefined) { d.anuladoPor   = d.anulado_por;   delete d.anulado_por;   }
     if (d.abonos === undefined) d.abonos = [];
     const totalAb = (Array.isArray(d.abonos) ? d.abonos : []).reduce((a,x)=>a+(Number(x.monto)||0),0);
     d.pendiente = (d.pendiente === undefined || d.pendiente === null)
@@ -76,6 +82,8 @@ export function fromDb(c, o) {
       : Number(d.pendiente);
     if (d.method !== "debe") d.pendiente = 0;
     try { if (typeof d.items === "string") d.items = JSON.parse(d.items); } catch { d.items = []; }
+    try { if (typeof d.lineItems === "string") d.lineItems = JSON.parse(d.lineItems); } catch { d.lineItems = []; }
+    if (!Array.isArray(d.lineItems)) d.lineItems = d.lineItems || [];
   }
   return d;
 }
