@@ -150,6 +150,25 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
   const staffL = users.filter(u => u.role === "barbero" || u.role === "tatuador");
   const days   = calDays(yr, mo);
 
+  // ── DISPONIBILIDAD EN VIVO (solo espacio del cliente) ─────────
+  // La vista pública no comparte el auto-refresh de app.js (ese solo
+  // corre para staff logueado, ver [data-taseca-auth]). Sin esto, dos
+  // clientes podían ver el mismo horario libre a la vez y chocar al
+  // agendar. Se mantiene local a este componente para no afectar Admin.
+  const [liveAppts, setLiveAppts] = useState(appts);
+  useEffect(() => { setLiveAppts(appts); }, [appts]);
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const fresh = await DB.all("appointments");
+        if (!cancelled) setLiveAppts(fresh);
+      } catch (e) { console.warn("[Taseca] refresh público error:", e.message); }
+    }
+    const iv = setInterval(refresh, 20000); // cada 20s mientras el cliente está en la página
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
   // ── AGENDA CONTINUA: sin slots fijos ─────────────────────────
   function getAvailableSlots(d, staffUser, service) {
     if (!staffUser || !d) return [];
@@ -161,7 +180,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     const lE  = staffUser.lunchEnd   ? pt(staffUser.lunchEnd)   : null;
 
     // Citas del día ordenadas — incluir bloqueados como ocupados
-    const busy = appts
+    const busy = liveAppts
       .filter(a => (a.stId||a.st_id)===staffUser.id && a.date===ds && a.status!=="cancelado")
       .map(a => ({
         start: pt(a.time),
@@ -215,6 +234,23 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
   async function confirm() {
     if (!nm) { setErr("Ingresa tu nombre"); return; }
     if (!vPhone(ph)) { setErr("El teléfono debe tener exactamente 10 dígitos"); return; }
+
+    // Revalidación de última hora contra el servidor: la disponibilidad
+    // mostrada pudo quedar desactualizada si otro cliente agendó el
+    // mismo horario mientras este completaba el formulario.
+    let fresh;
+    try { fresh = await DB.all("appointments"); } catch { fresh = liveAppts; }
+    const taken = fresh.some(x =>
+      (x.stId||x.st_id) === (stf?stf.id:null) && x.date === ts(dt) && x.time === tm && x.status !== "cancelado"
+    );
+    if (taken) {
+      setLiveAppts(fresh);
+      setErr("Ese horario se acaba de ocupar. Elige otro horario.");
+      setTm(null);
+      setStep(3);
+      return;
+    }
+
     const a = { id:"a"+Date.now(), client:nm, phone:ph, svc:svc?svc.name:"", svcId:svc?svc.id:"",
                 stId:stf?stf.id:null, date:ts(dt), time:tm, status:"pendiente", dur:svc?svc.dur:30 };
     let cliData = clientFound;
@@ -242,7 +278,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
 
   let loyClient = null;
   if (lv && lp) loyClient = clients.find(c => c.phone === lp) || null;
-  const loyAppts = loyClient ? appts.filter(a => a.client===loyClient.name||a.phone===loyClient.phone).slice().reverse().slice(0,5) : [];
+  const loyAppts = loyClient ? liveAppts.filter(a => a.client===loyClient.name||a.phone===loyClient.phone).slice().reverse().slice(0,5) : [];
 
   const pubTabs = [["booking","📅 Agendar"],["gestionar","🔍 Mis citas"],["registro","📝 Registro"]];
   if (stampsOn) pubTabs.push(["loyalty","🎫 Mi tarjeta"]);
@@ -325,7 +361,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
         avSlots.m.length>0&&ce("div",null,
           ce("div",{style:{fontSize:10,color:C.muted,marginBottom:5}},"🌅 Mañana"),
           ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:9}},
-            avSlots.m.map(sl=>ce("div",{key:sl,onClick:()=>setTm(sl),
+            avSlots.m.map(sl=>ce("div",{key:sl,onClick:()=>{setTm(sl);setErr("");},
               style:{padding:"7px 3px",borderRadius:7,border:"1px solid "+(tm===sl?C.accent:C.border),
                      background:tm===sl?C.accent+"22":"transparent",color:tm===sl?C.accent:C.muted,
                      cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},to12h(sl)))
@@ -334,13 +370,14 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
         avSlots.a.length>0&&ce("div",null,
           ce("div",{style:{fontSize:10,color:C.muted,marginBottom:5}},"🌆 Tarde"),
           ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:9}},
-            avSlots.a.map(sl=>ce("div",{key:sl,onClick:()=>setTm(sl),
+            avSlots.a.map(sl=>ce("div",{key:sl,onClick:()=>{setTm(sl);setErr("");},
               style:{padding:"7px 3px",borderRadius:7,border:"1px solid "+(tm===sl?C.accent:C.border),
                      background:tm===sl?C.accent+"22":"transparent",color:tm===sl?C.accent:C.muted,
                      cursor:"pointer",fontSize:11,textAlign:"center",fontWeight:tm===sl?700:400}},to12h(sl)))
           )
         )
       ),
+      err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:9}},"⚠️ ",err),
       ce("div",{style:{display:"flex",gap:9}},
         ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>{
           if(window._gReagendarAppt){setPtab("gestionar");window._gReagendarAppt=null;}
@@ -351,7 +388,18 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
             // Si viene de reagendar — guardar directamente sin pedir datos
             if(window._gReagendarAppt){
               const orig = window._gReagendarAppt;
-              const upd  = {...orig, date:ts(dt), time:tm};
+              // Revalidar contra el servidor antes de mover la cita
+              let fresh;
+              try { fresh = await DB.all("appointments"); } catch { fresh = liveAppts; }
+              const taken = fresh.some(x =>
+                x.id!==orig.id && (x.stId||x.st_id)===(stf?stf.id:null) && x.date===ts(dt) && x.time===tm && x.status!=="cancelado"
+              );
+              if (taken) {
+                setLiveAppts(fresh);
+                setErr("Ese horario se acaba de ocupar. Elige otro horario.");
+                setTm(null);
+                return;
+              }
               // Actualizar en Supabase
               try {
                 await fetch(window.SB_URL+"/rest/v1/appointments?id=eq."+orig.id,{
@@ -480,7 +528,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
           )
         ),
         // Gestionar — renderizado por GestionarTab component
-        ptab==="gestionar" && ce(GestionarTab, {appts,users,svcs,setStf,setSvc,setStep,setPtab}),
+        ptab==="gestionar" && ce(GestionarTab, {appts:liveAppts,users,svcs,setStf,setSvc,setStep,setPtab}),
 
         // Loyalty
         ptab==="loyalty" && stampsOn && ce("div",null,
