@@ -33,7 +33,7 @@ function GestionarTab({ appts, users, svcs, setStf, setSvc, setStep, setPtab }) 
     if (digits.length !== 10) { setGErr("Ingresa un número de 10 dígitos"); return; }
     setGErr("");
     const found = appts
-      .filter(a => (a.phone||"") === digits)
+      .filter(a => (a.phone||"") === digits && a.date >= today())
       .sort((a,b) => (a.date+a.time) > (b.date+b.time) ? -1 : 1);
     setGCitas(found);
   }
