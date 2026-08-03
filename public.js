@@ -3,7 +3,7 @@ import { pt, ts, today, vPhone, calDays, weekOf, scheduleReminder } from "./help
 import { DB } from "./db.js";
 import { Logo, Field, PhoneInput, StampCard, PtsBar } from "./components.js";
 
-const { createElement: ce, useState, useEffect } = React;
+const { createElement: ce, useState, useEffect, useRef } = React;
 
 // Convierte "14:00" (24h) a "2:00 PM" (12h) SOLO para mostrar al usuario.
 // El valor interno guardado en la BD sigue siendo 24h ("14:00").
@@ -231,39 +231,52 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     });
   }
 
+  // Guard contra doble clic: un ref (efecto inmediato, antes del
+  // re-render) + un estado (para deshabilitar visualmente el botón).
+  const confirmingRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+
   async function confirm() {
+    if (confirmingRef.current) return;
     if (!nm) { setErr("Ingresa tu nombre"); return; }
     if (!vPhone(ph)) { setErr("El teléfono debe tener exactamente 10 dígitos"); return; }
+    confirmingRef.current = true;
+    setConfirming(true);
 
-    // Revalidación de última hora contra el servidor: la disponibilidad
-    // mostrada pudo quedar desactualizada si otro cliente agendó el
-    // mismo horario mientras este completaba el formulario.
-    let fresh;
-    try { fresh = await DB.all("appointments"); } catch { fresh = liveAppts; }
-    const taken = fresh.some(x =>
-      (x.stId||x.st_id) === (stf?stf.id:null) && x.date === ts(dt) && x.time === tm && x.status !== "cancelado"
-    );
-    if (taken) {
-      setLiveAppts(fresh);
-      setErr("Ese horario se acaba de ocupar. Elige otro horario.");
-      setTm(null);
-      setStep(3);
-      return;
-    }
+    try {
+      // Revalidación de última hora contra el servidor: la disponibilidad
+      // mostrada pudo quedar desactualizada si otro cliente agendó el
+      // mismo horario mientras este completaba el formulario.
+      let fresh;
+      try { fresh = await DB.all("appointments"); } catch { fresh = liveAppts; }
+      const taken = fresh.some(x =>
+        (x.stId||x.st_id) === (stf?stf.id:null) && x.date === ts(dt) && x.time === tm && x.status !== "cancelado"
+      );
+      if (taken) {
+        setLiveAppts(fresh);
+        setErr("Ese horario se acaba de ocupar. Elige otro horario.");
+        setTm(null);
+        setStep(3);
+        return;
+      }
 
-    const a = { id:"a"+Date.now(), client:nm, phone:ph, svc:svc?svc.name:"", svcId:svc?svc.id:"",
-                stId:stf?stf.id:null, date:ts(dt), time:tm, status:"pendiente", dur:svc?svc.dur:30 };
-    let cliData = clientFound;
-    if (!clientFound) {
-      const newCli = { id:"c"+Date.now(), name:nm, phone:ph, email:"", visits:0, last:"-", stamps:0, pts:0, since:today() };
-      cliData = newCli; onReg(newCli);
-      try { await DB.save("clients", newCli.id, newCli); } catch {}
-    } else {
-      const upd = { ...clientFound, visits:(clientFound.visits||0)+1, last:today() };
-      onReg(upd); try { await DB.save("clients", upd.id, upd); } catch {}
+      const a = { id:"a"+Date.now(), client:nm, phone:ph, svc:svc?svc.name:"", svcId:svc?svc.id:"",
+                  stId:stf?stf.id:null, date:ts(dt), time:tm, status:"pendiente", dur:svc?svc.dur:30 };
+      let cliData = clientFound;
+      if (!clientFound) {
+        const newCli = { id:"c"+Date.now(), name:nm, phone:ph, email:"", visits:0, last:"-", stamps:0, pts:0, since:today() };
+        cliData = newCli; onReg(newCli);
+        try { await DB.save("clients", newCli.id, newCli); } catch {}
+      } else {
+        const upd = { ...clientFound, visits:(clientFound.visits||0)+1, last:today() };
+        onReg(upd); try { await DB.save("clients", upd.id, upd); } catch {}
+      }
+      try { await DB.save("appointments", a.id, a); } catch (e) { console.error(e); setErr("No se pudo agendar la cita. Intenta de nuevo en unos segundos."); return; } onBook(a); setStep(5);
+      scheduleReminder(a, cliData, stf?stf.name:"Tu profesional");
+    } finally {
+      confirmingRef.current = false;
+      setConfirming(false);
     }
-    try { await DB.save("appointments", a.id, a); } catch (e) { console.error(e); setErr("No se pudo agendar la cita. Intenta de nuevo en unos segundos."); return; } onBook(a); setStep(5);
-    scheduleReminder(a, cliData, stf?stf.name:"Tu profesional");
   }
 
   async function doReg() {
@@ -379,14 +392,18 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
       ),
       err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:9}},"⚠️ ",err),
       ce("div",{style:{display:"flex",gap:9}},
-        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>{
+        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},disabled:confirming,onClick:()=>{
           if(window._gReagendarAppt){setPtab("gestionar");window._gReagendarAppt=null;}
           else setStep(2);
         }},"← Volver"),
-        ce("button",{type:"button",style:{...S.btn(),flex:2,opacity:dt&&tm?1:0.4},disabled:!(dt&&tm),
+        ce("button",{type:"button",style:{...S.btn(),flex:2,opacity:(dt&&tm&&!confirming)?1:0.4,cursor:confirming?"not-allowed":"pointer"},disabled:!(dt&&tm)||confirming,
           onClick:async()=>{
+            if (confirmingRef.current) return;
             // Si viene de reagendar — guardar directamente sin pedir datos
             if(window._gReagendarAppt){
+              confirmingRef.current = true;
+              setConfirming(true);
+              try {
               const orig = window._gReagendarAppt;
               // Revalidar contra el servidor antes de mover la cita
               let fresh;
@@ -413,11 +430,15 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
               window._gReagendarName=null;
               // Mostrar éxito
               setStep(5);
+              } finally {
+                confirmingRef.current = false;
+                setConfirming(false);
+              }
             } else {
               setStep(4);
             }
           }
-        }, window._gReagendarAppt ? "✅ Confirmar reagenda" : "Continuar →")
+        }, confirming ? "⏳ Guardando..." : (window._gReagendarAppt ? "✅ Confirmar reagenda" : "Continuar →"))
       )
     );
   }
@@ -445,8 +466,8 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
       ce(Field,{label:"Nombre completo *",val:nm,set:setNm,ph:"Carlos Pérez"}),
       err&&ce("div",{style:{background:C.err+"22",border:"1px solid "+C.err+"44",borderRadius:9,padding:"8px 11px",fontSize:12,color:C.err,marginBottom:9}},"⚠️ ",err),
       ce("div",{style:{display:"flex",gap:9}},
-        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>setStep(3)},"← Volver"),
-        ce("button",{type:"button",style:{...S.btn(),flex:2},onClick:confirm},"Confirmar ✓")
+        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1},onClick:()=>setStep(3),disabled:confirming},"← Volver"),
+        ce("button",{type:"button",style:{...S.btn(),flex:2,opacity:confirming?0.6:1,cursor:confirming?"not-allowed":"pointer"},disabled:confirming,onClick:confirm},confirming?"⏳ Agendando...":"Confirmar ✓")
       )
     );
   }
