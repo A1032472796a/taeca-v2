@@ -465,6 +465,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [sub,      setSub]      = useState(user?.role==="vendedor"?"productos":"servicios");
   const [cajSub,   setCajSub]   = useState("servicios");
   const [cajFilt,  setCajFilt]  = useState("todas");
+  const [cajDateFrom, setCajDateFrom] = useState(""); // filtro de fecha — Caja/Productos
+  const [cajDateTo,   setCajDateTo]   = useState("");
   const [mdl,      setMdl]      = useState(null);
   const [schUser,  setSchUser]  = useState(null);
   const [adet,     setAdet]     = useState(null);
@@ -1262,6 +1264,20 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const visAppts   = isAdmin?appts:appts.filter(a=>(a.stId||a.st_id)===user.id);
   const visSales   = (isAdmin||user.role==="vendedor")?sales:sales.filter(s=>visAppts.some(a=>a.client===s.client));
 
+  // ── Caja / Productos: filtro por estado + cliente + rango de fecha ──
+  const cajBaseSales = (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"&&!s.anulado)
+    :cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"&&!s.anulado)
+    :cajFilt==="anuladas"?prodSales.filter(s=>s.anulado)
+    :prodSales.filter(s=>!s.anulado))
+    .filter(s=>!cliSearch||(s.client||"").toLowerCase().includes(cliSearch.toLowerCase()));
+  const cajHasRange   = !!(cajDateFrom||cajDateTo);
+  const cajInRange    = s => (!cajDateFrom||s.date>=cajDateFrom) && (!cajDateTo||s.date<=cajDateTo);
+  const visProdSales  = cajHasRange ? cajBaseSales.filter(cajInRange) : cajBaseSales;
+  const cajTotalHoy   = cajBaseSales.filter(s=>s.date===today()).reduce((a,s)=>a+(Number(s.total)||0),0);
+  const cajCountHoy   = cajBaseSales.filter(s=>s.date===today()).length;
+  const cajTotalRango = cajHasRange ? visProdSales.reduce((a,s)=>a+(Number(s.total)||0),0) : 0;
+  const cajCountRango = cajHasRange ? visProdSales.length : 0;
+
   function PhotoBtn({u}){
     const ref=useRef();
     return ce("span",null,
@@ -1483,13 +1499,34 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                 )
               ),
               ce("input",{style:{...S.inp,marginBottom:12},placeholder:"🔍 Buscar por nombre de cliente...",value:cliSearch,onChange:e2=>setCliSearch(e2.target.value)}),
+              ce("div",{style:{display:"flex",gap:8,alignItems:"flex-end",marginBottom:12,flexWrap:"wrap"}},
+                ce("div",{style:{flex:1,minWidth:120}},
+                  ce("label",{style:S.lbl},"Desde"),
+                  ce("input",{type:"date",style:S.inp,value:cajDateFrom,onChange:e2=>setCajDateFrom(e2.target.value)})
+                ),
+                ce("div",{style:{flex:1,minWidth:120}},
+                  ce("label",{style:S.lbl},"Hasta"),
+                  ce("input",{type:"date",style:S.inp,value:cajDateTo,onChange:e2=>setCajDateTo(e2.target.value)})
+                ),
+                ce("button",{type:"button",onClick:()=>{setCajDateFrom(today());setCajDateTo(today());},
+                  style:{...S.btn("ghost"),padding:"9px 12px",fontSize:12,whiteSpace:"nowrap"}},"Hoy"),
+                cajHasRange&&ce("button",{type:"button",onClick:()=>{setCajDateFrom("");setCajDateTo("");},
+                  style:{...S.btn("ghost"),padding:"9px 12px",fontSize:12,whiteSpace:"nowrap",color:C.err}},"✕ Limpiar")
+              ),
+              ce("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+                ce("div",{style:{flex:1,minWidth:140,background:C.card,border:"1px solid "+C.border,borderRadius:11,padding:"10px 13px"}},
+                  ce("div",{style:{fontSize:10,color:C.muted,marginBottom:3}},"📅 Vendido hoy"),
+                  ce("b",{style:{fontSize:17,color:C.accent}},"$",cajTotalHoy),
+                  ce("span",{style:{fontSize:10,color:C.muted,marginLeft:6}},cajCountHoy," venta",cajCountHoy===1?"":"s")
+                ),
+                cajHasRange&&ce("div",{style:{flex:1,minWidth:140,background:C.card,border:"1px solid "+C.cyan+"55",borderRadius:11,padding:"10px 13px"}},
+                  ce("div",{style:{fontSize:10,color:C.muted,marginBottom:3}},"🗓️ Rango (",cajDateFrom||"…"," a ",cajDateTo||"…",")"),
+                  ce("b",{style:{fontSize:17,color:C.cyan}},"$",cajTotalRango),
+                  ce("span",{style:{fontSize:10,color:C.muted,marginLeft:6}},cajCountRango," venta",cajCountRango===1?"":"s")
+                )
+              ),
               ce("div",{className:"desktop-2col"},
-                (cajFilt==="debe"?prodSales.filter(s=>s.method==="debe"&&!s.anulado)
-                  :cajFilt==="pagadas"?prodSales.filter(s=>s.method!=="debe"&&!s.anulado)
-                  :cajFilt==="anuladas"?prodSales.filter(s=>s.anulado)
-                  :prodSales.filter(s=>!s.anulado))
-                  .filter(s=>!cliSearch||(s.client||"").toLowerCase().includes(cliSearch.toLowerCase()))
-                  .map(s=>{
+                visProdSales.map(s=>{
                   const isDebt=s.method==="debe";
                   const abonos3=s.abonos||[];
                   const totalAb3=abonos3.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
