@@ -6,13 +6,6 @@ import { WeekCal, SchedMdl } from "./calendar.js";
 
 const { createElement: ce, useState, useEffect, useRef } = React;
 
-// ─── DESCUENTO POR ÍTEM (product_sales.lineItems[].disc, % 0-100) ──
-// Subtotal de una línea aplicando su descuento porcentual.
-function lineSubtotal(x) {
-  const d = Math.min(100, Math.max(0, Number(x.disc) || 0));
-  return Math.round(x.price * x.qty * (1 - d / 100) * 100) / 100;
-}
-
 // ─── REPORTES ────────────────────────────────────────────────────
 function Reportes({ appts, sales, clients, users, isAdmin, prodSales = [], prods = [] }) {
   const [period, setPeriod] = useState("month");
@@ -843,8 +836,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     const [dp,setDp]=useState(""); const [selProds,setSelProds]=useState([]); const [search,setSearch]=useState("");
     const [showList,setShowList]=useState(false); const [err2,setErr2]=useState(""); const [clientFound2,setClientFound2]=useState(null);
     const [internal,setInternal]=useState(false); // venta interna a barbero
-    const total=Math.round(selProds.reduce((a,x)=>a+lineSubtotal(x),0)*100)/100;
+    const total=selProds.reduce((a,x)=>a+x.price*x.qty,0);
     const filteredProds=prods.filter(pr=>!search||pr.name.toLowerCase().includes(search.toLowerCase()));
+    // Precio de catálogo (para calcular el % de descuento de forma informativa)
+    function catalogPriceOf(x){ const pr=prods.find(p=>p.id===x.id); return pr?pr.price:x.price; }
+    function discPct(x){ const cat=catalogPriceOf(x); if(!cat||x.price>=cat) return null; return Math.round((1-x.price/cat)*100); }
     function handlePhone(v){
       const digits=v.replace(/\D/g,"").slice(0,10); setPh(digits);
       if(digits.length===10){const f=clients.find(c=>c.phone===digits);setClientFound2(f||null);if(f)setCl(f.name);}
@@ -856,7 +852,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       setSelProds(prev=>{
         const ex=prev.find(x=>x.id===pr.id);
         if(ex){if(ex.qty>=stock){setErr2("Stock insuficiente: "+stock);return prev;}return prev.map(x=>x.id===pr.id?{...x,qty:x.qty+1}:x);}
-        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1,disc:0,stock}];
+        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1,stock}];
       });
       setSearch(""); setShowList(false);
     }
@@ -865,10 +861,6 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       const n=Math.max(0,Number(val)||0);
       setSelProds(prev=>prev.map(x=>x.id===id?{...x,price:n}:x));
     }
-    function changeDisc(id,val){
-      const n=Math.min(100,Math.max(0,Number(val)||0));
-      setSelProds(prev=>prev.map(x=>x.id===id?{...x,disc:n}:x));
-    }
     async function save(){
       setErr2("");
       if(!cl.trim()){setErr2("Nombre del cliente obligatorio");return;}
@@ -876,7 +868,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       if(mt==="debe"&&!dp){setErr2("Selecciona fecha de pago");return;}
       const item={id:"v"+Date.now(),client:cl.trim(),phone:ph,
         items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
-        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty,disc:x.disc||0})),
+        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty})),
         total,method:mt,internal,dueDate:mt==="debe"?dp:null,date:today(),abonos:[],pendiente:mt==="debe"?total:0};
       setProdSales(x=>[...x,item]); closeM();
       try{
@@ -967,14 +959,13 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                       ce("input",{type:"number",value:x.price,onChange:e2=>changePrice(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
                         style:{width:80,background:"#0d1520",border:"1.5px solid "+C.cyan,borderRadius:6,color:C.cyan,fontSize:12,padding:"4px 7px",fontWeight:700}})
                     )
-                  : ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price),
-                ce("div",{style:{display:"flex",alignItems:"center",gap:4,marginTop:3}},
-                  ce("span",{style:{fontSize:9,color:C.muted}},"Desc:"),
-                  ce("input",{type:"number",min:0,max:100,value:x.disc||"",placeholder:"0",
-                    onChange:e2=>changeDisc(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
-                    style:{width:46,background:"#0d1520",border:"1px solid "+C.border,borderRadius:6,color:C.warn,fontSize:11,padding:"3px 5px"}}),
-                  ce("span",{style:{fontSize:10,color:C.muted}},"%")
-                )
+                  : ce("div",{style:{display:"flex",alignItems:"center",gap:4,marginTop:3}},
+                      ce("span",{style:{fontSize:9,color:C.muted}},"Precio:"),
+                      ce("span",{style:{fontSize:12,color:C.accent,fontWeight:700}},"$"),
+                      ce("input",{type:"number",value:x.price,onChange:e2=>changePrice(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
+                        style:{width:70,background:"#0d1520",border:"1px solid "+C.border,borderRadius:6,color:C.text,fontSize:12,padding:"4px 7px",fontWeight:700}}),
+                      discPct(x)!=null&&ce("span",{style:{fontSize:10,color:C.warn,fontWeight:700}},"-",discPct(x),"% dto.")
+                    )
               ),
               ce("div",{style:{display:"flex",alignItems:"center",gap:3}},
                 ce("button",{type:"button",onClick:()=>changeQty(x.id,-1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"−"),
@@ -982,8 +973,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                 ce("button",{type:"button",onClick:()=>changeQty(x.id,1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"+")
               ),
               ce("div",{style:{minWidth:52,textAlign:"right"}},
-                x.disc>0&&ce("div",{style:{fontSize:10,color:C.muted,textDecoration:"line-through"}},"$",Math.round(x.price*x.qty*100)/100),
-                ce("b",{style:{color:C.accent,fontSize:12}},"$",lineSubtotal(x))
+                !internal&&discPct(x)!=null&&ce("div",{style:{fontSize:10,color:C.muted,textDecoration:"line-through"}},"$",catalogPriceOf(x)*x.qty),
+                ce("b",{style:{color:C.accent,fontSize:12}},"$",x.price*x.qty)
               ),
               ce("button",{type:"button",onClick:()=>setSelProds(p=>p.filter(s=>s.id!==x.id)),style:{background:"none",border:"none",color:C.err,cursor:"pointer"}},"✕")
             )),
@@ -1017,8 +1008,11 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     const [selProds,setSelProds]=useState(original.map(x=>({...x})));
     const [search,setSearch]=useState(""); const [showList,setShowList]=useState(false); const [errE,setErrE]=useState("");
     const noDetail = original.length===0 && (s.items||[]).length>0;
-    const total=Math.round(selProds.reduce((a,x)=>a+lineSubtotal(x),0)*100)/100;
+    const total=selProds.reduce((a,x)=>a+x.price*x.qty,0);
     const filteredProds=prods.filter(pr=>!search||pr.name.toLowerCase().includes(search.toLowerCase()));
+    // Precio de catálogo (para calcular el % de descuento de forma informativa)
+    function catalogPriceOf(x){ const pr=prods.find(p=>p.id===x.id); return pr?pr.price:x.price; }
+    function discPct(x){ const cat=catalogPriceOf(x); if(!cat||x.price>=cat) return null; return Math.round((1-x.price/cat)*100); }
     function availStock(pr){
       const orig=original.find(o=>o.id===pr.id);
       return (pr.stock||0)+(orig?orig.qty:0); // stock actual ya tiene descontado lo de este pedido
@@ -1030,7 +1024,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         const curQty=ex?ex.qty:0;
         if(curQty+1>stock){setErrE("Stock insuficiente: "+stock);return prev;}
         if(ex) return prev.map(x=>x.id===pr.id?{...x,qty:x.qty+1}:x);
-        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1,disc:0}];
+        return [...prev,{id:pr.id,name:pr.name,price:pr.price,qty:1}];
       });
       setErrE(""); setSearch(""); setShowList(false);
     }
@@ -1045,9 +1039,9 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
         return {...x,qty:nq};
       }).filter(Boolean));
     }
-    function changeDisc(id,val){
-      const n=Math.min(100,Math.max(0,Number(val)||0));
-      setSelProds(prev=>prev.map(x=>x.id===id?{...x,disc:n}:x));
+    function changePrice(id,val){
+      const n=Math.max(0,Number(val)||0);
+      setSelProds(prev=>prev.map(x=>x.id===id?{...x,price:n}:x));
     }
     async function save(){
       setErrE("");
@@ -1057,7 +1051,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
       const newPend=isDebt?Math.max(0,total-totalAb):0;
       const upd={...s,
         items:selProds.map(x=>x.qty>1?x.name+" x"+x.qty:x.name),
-        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty,disc:x.disc||0})),
+        lineItems:selProds.map(x=>({id:x.id,name:x.name,price:x.price,qty:x.qty})),
         total,pendiente:newPend
       };
       setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));
@@ -1099,13 +1093,12 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           selProds.map(x=>ce("div",{key:x.id,style:{display:"flex",alignItems:"center",gap:7,marginBottom:5,background:C.card,borderRadius:8,padding:"6px 9px"}},
             ce("div",{style:{flex:1}},
               ce("span",{style:{fontSize:12,fontWeight:700}},x.name),
-              ce("span",{style:{fontSize:11,color:C.accent,marginLeft:7}},"$",x.price),
               ce("div",{style:{display:"flex",alignItems:"center",gap:4,marginTop:3}},
-                ce("span",{style:{fontSize:9,color:C.muted}},"Desc:"),
-                ce("input",{type:"number",min:0,max:100,value:x.disc||"",placeholder:"0",
-                  onChange:e2=>changeDisc(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
-                  style:{width:46,background:"#0d1520",border:"1px solid "+C.border,borderRadius:6,color:C.warn,fontSize:11,padding:"3px 5px"}}),
-                ce("span",{style:{fontSize:10,color:C.muted}},"%")
+                ce("span",{style:{fontSize:9,color:C.muted}},"Precio:"),
+                ce("span",{style:{fontSize:12,color:C.accent,fontWeight:700}},"$"),
+                ce("input",{type:"number",value:x.price,onChange:e2=>changePrice(x.id,e2.target.value),onClick:e2=>e2.stopPropagation(),
+                  style:{width:70,background:"#0d1520",border:"1px solid "+C.border,borderRadius:6,color:C.text,fontSize:12,padding:"4px 7px",fontWeight:700}}),
+                discPct(x)!=null&&ce("span",{style:{fontSize:10,color:C.warn,fontWeight:700}},"-",discPct(x),"% dto.")
               )
             ),
             ce("div",{style:{display:"flex",alignItems:"center",gap:3}},
@@ -1114,8 +1107,8 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
               ce("button",{type:"button",onClick:()=>changeQty(x.id,1),style:{width:22,height:22,borderRadius:6,border:"none",background:C.border,color:C.text,cursor:"pointer"}},"+")
             ),
             ce("div",{style:{minWidth:52,textAlign:"right"}},
-              x.disc>0&&ce("div",{style:{fontSize:10,color:C.muted,textDecoration:"line-through"}},"$",Math.round(x.price*x.qty*100)/100),
-              ce("b",{style:{color:C.accent,fontSize:12}},"$",lineSubtotal(x))
+              discPct(x)!=null&&ce("div",{style:{fontSize:10,color:C.muted,textDecoration:"line-through"}},"$",catalogPriceOf(x)*x.qty),
+              ce("b",{style:{color:C.accent,fontSize:12}},"$",x.price*x.qty)
             ),
             ce("button",{type:"button",onClick:()=>setSelProds(p=>p.filter(sp=>sp.id!==x.id))
               ,style:{background:"none",border:"none",color:C.err,cursor:"pointer"}},"✕")
