@@ -474,6 +474,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
   const [abonoMdl,    setAbonoMdl]    = useState(null);
   const [editSaleMdl, setEditSaleMdl] = useState(null); // pedido de productos en edición
   const [anularConfirm, setAnularConfirm] = useState(null); // id de pedido pendiente de confirmar anulación
+  const [pagoTotalConfirm, setPagoTotalConfirm] = useState(null); // id de pedido pendiente de confirmar pago total
   const [reschedMdl,  setReschedMdl]  = useState(null); // cita a reagendar
   const [prodSearch,setProdSearch] = useState("");
   const [cliSearch, setCliSearch]  = useState("");
@@ -1532,7 +1533,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                   const totalAb3=abonos3.reduce((a,ab)=>a+(Number(ab.monto)||0),0);
                   const pend2=isDebt?(s.pendiente!==undefined?Number(s.pendiente):Math.max(0,s.total-totalAb3)):0;
                   const isVencida=isDebt&&s.dueDate&&s.dueDate<today();
-                  return ce("div",{key:s.id,style:{...S.card,border:"1px solid "+(s.anulado?C.err+"44":isVencida?C.err+"66":isDebt?C.warn+"55":C.border),opacity:s.anulado?0.6:1}},
+                  return ce("div",{key:s.id,style:{...S.card,minWidth:0,border:"1px solid "+(s.anulado?C.err+"44":isVencida?C.err+"66":isDebt?C.warn+"55":C.border),opacity:s.anulado?0.6:1}},
                     ce("div",{style:S.row},
                       ce("div",{style:{flex:1,minWidth:0}},
                         ce("b",{style:{fontSize:12,textDecoration:s.anulado?"line-through":"none"}},s.client),
@@ -1570,10 +1571,7 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                     ),
                     !s.anulado&&(isDebt&&(isAdmin||user.role==="vendedor"))&&ce("div",{style:{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}},
                       ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"7px",fontSize:11,border:"1px solid "+C.warn+"55",color:C.warn},onClick:()=>setAbonoMdl({...s,_table:"product_sales"})},"💵 Abonar"),
-                      ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"7px",fontSize:11,color:"#000"},onClick:()=>{
-                        const upd={...s,method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0};
-                        setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));DB.save("product_sales",upd.id,upd).catch(()=>{});
-                      }},"✅ Pago total"),
+                      ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"7px",fontSize:11,color:"#000"},onClick:()=>setPagoTotalConfirm(s.id)},"✅ Pago total"),
                       s.phone&&(()=>{
                         const phone=s.phone.replace(/\D/g,"");
                         const waPhone=phone.length===10?"57"+phone:phone;
@@ -1616,6 +1614,20 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
                           DB.save("product_sales",upd.id,upd).catch(()=>{});
                           setAnularConfirm(null);
                         }},"Sí, anular")
+                      )
+                    ),
+                    !s.anulado&&pagoTotalConfirm===s.id&&ce("div",{style:{marginTop:8,background:C.cyan+"18",border:"1px solid "+C.cyan+"55",borderRadius:10,padding:"9px 11px"}},
+                      ce("div",{style:{fontSize:11,color:C.cyan,fontWeight:700,marginBottom:4}},"¿Marcar como pagado en su totalidad?"),
+                      ce("div",{style:{fontSize:10,color:C.muted,marginBottom:8}},
+                        "Se registrará como pagado el saldo pendiente de $",pend2," (de $",s.total," total). Esto borra el historial de abonos y no se puede deshacer."
+                      ),
+                      ce("div",{style:{display:"flex",gap:8}},
+                        ce("button",{type:"button",style:{...S.btn("ghost"),flex:1,padding:"6px",fontSize:11},onClick:()=>setPagoTotalConfirm(null)},"Cancelar"),
+                        ce("button",{type:"button",style:{...S.btn("cyan"),flex:1,padding:"6px",fontSize:11,color:"#000"},onClick:()=>{
+                          const upd={...s,method:"efectivo",dueDate:null,paidDate:today(),abonos:[],pendiente:0};
+                          setProdSales(x=>x.map(ss=>ss.id===s.id?upd:ss));DB.save("product_sales",upd.id,upd).catch(()=>{});
+                          setPagoTotalConfirm(null);
+                        }},"Sí, marcar pagado")
                       )
                     )
                   );
