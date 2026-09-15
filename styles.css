@@ -52,6 +52,7 @@ b,strong{color:inherit;-webkit-text-fill-color:inherit}
   .app-sidebar{width:240px;min-width:240px}
   .app-main{max-width:none}
   .desktop-2col{display:grid!important;grid-template-columns:1fr 1fr;gap:16px}
+  .desktop-2col>*{min-width:0}
   .desktop-3col{display:grid!important;grid-template-columns:repeat(3,1fr);gap:14px}
   .cal-slot-day{min-height:56px!important}
 }
