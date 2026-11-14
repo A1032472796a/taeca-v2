@@ -500,80 +500,32 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
     checkN(); const iv=setInterval(checkN,60000); return ()=>clearInterval(iv);
   },[]);
 
-  // ── AUTO-RESOLVER CITAS SUPERPUESTAS (solo hoy en adelante) ────
-  // Si dos citas del mismo profesional quedaron con horarios que se
-  // cruzan (p.ej. por una reserva concurrente), se conserva la más
-  // antigua (ID más bajo) y se reprograma la más reciente al
-  // siguiente horario libre. NUNCA toca citas con fecha < hoy.
+  // ── DETECTOR DE CITAS SUPERPUESTAS (solo aviso, NO mueve nada) ──
+  // Antes este bloque reprogramaba en silencio las citas que se cruzaban,
+  // en cascada y sin avisar al cliente: eso era lo que "corría la agenda".
+  // Ahora solo detecta los cruces y los muestra al admin para que decida
+  // y contacte al cliente. Nunca escribe en la base de datos.
+  const [overlaps, setOverlaps] = useState([]);
   useEffect(() => {
-    if (!isAdmin) return; // solo el admin ejecuta la reconciliación
+    if (!isAdmin) return;
     const todayStr = today();
-
-    function findNextSlot(stId, fromDate, fromTime, dur, placedByDate) {
-      const staffUser = users.find(u => u.id === stId);
-      if (!staffUser) return null;
-      const [Y, M, D] = fromDate.split("-").map(Number);
-      let dateObj = new Date(Y, M - 1, D);
-      let startTime = fromTime;
-      for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
-        const ds = ts(dateObj);
-        if ((staffUser.workDays||[]).includes(dateObj.getDay()) && staffUser.blocks?.[ds] !== true) {
-          const wS = pt(staffUser.wStart || "09:00");
-          const wE = pt(staffUser.wEnd   || "19:00");
-          const lS = staffUser.lunchStart ? pt(staffUser.lunchStart) : null;
-          const lE = staffUser.lunchEnd   ? pt(staffUser.lunchEnd)   : null;
-          let cursor = Math.max(dayOffset === 0 ? pt(startTime) : wS, wS);
-          const busy = (placedByDate[ds] || []).map(a => ({ start: pt(a.time), end: pt(a.time) + (a.dur||30) }));
-          if (lS !== null && lE !== null) busy.push({ start: lS, end: lE });
-          busy.sort((a,b) => a.start - b.start);
-          while (cursor + dur <= wE) {
-            const hit = busy.find(b => cursor < b.end && cursor + dur > b.start);
-            if (!hit) return { date: ds, time: (Math.floor(cursor/60)<10?"0":"")+Math.floor(cursor/60)+":"+String(cursor%60).padStart(2,"0") };
-            cursor = hit.end;
-          }
-        }
-        dateObj.setDate(dateObj.getDate() + 1);
-        startTime = "00:00";
-      }
-      return null;
-    }
-
-    const byStaff = {};
+    const byKey = {};
     appts.forEach(a => {
-      if (a.status === "cancelado" || a.date < todayStr) return; // no tocar historial
-      const stId = a.stId || a.st_id;
-      (byStaff[stId] = byStaff[stId] || []).push(a);
+      if (a.status === "cancelado" || a.date < todayStr) return;
+      const k = (a.stId || a.st_id) + "|" + a.date;
+      (byKey[k] = byKey[k] || []).push(a);
     });
-
-    const moves = [];
-    Object.entries(byStaff).forEach(([stId, list]) => {
-      // Orden de creación: el ID más bajo (más antiguo) conserva su horario.
-      const sorted = [...list].sort((a,b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-      const placedByDate = {};
-      sorted.forEach(a => {
-        const ds = a.date, aStart = pt(a.time), aEnd = aStart + (a.dur||30);
-        const dayList = placedByDate[ds] || [];
-        const overlaps = dayList.some(p => { const pS=pt(p.time), pE=pS+(p.dur||30); return aStart<pE && aEnd>pS; });
-        if (overlaps) {
-          const next = findNextSlot(stId, ds, a.time, a.dur||30, placedByDate);
-          if (next) {
-            const moved = { ...a, date: next.date, time: next.time };
-            moves.push(moved);
-            (placedByDate[next.date] = placedByDate[next.date] || []).push(moved);
-            return;
-          }
+    const found = [];
+    Object.values(byKey).forEach(list => {
+      const sorted = [...list].sort((a,b) => pt(a.time) - pt(b.time));
+      for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+          const a = sorted[i], b = sorted[j];
+          if (pt(b.time) < pt(a.time) + (a.dur || 30)) found.push([a, b]);
         }
-        (placedByDate[ds] = placedByDate[ds] || []).push(a);
-      });
+      }
     });
-
-    if (moves.length > 0) {
-      setAppts(prev => prev.map(a => moves.find(m => m.id === a.id) || a));
-      moves.forEach(m => {
-        console.warn("[Taseca] Cita reprogramada por conflicto:", m.client, "→", m.date, m.time);
-        DB.save("appointments", m.id, m).catch(e => console.error("[auto-resolve]", e));
-      });
-    }
+    setOverlaps(found);
   }, [appts, isAdmin]);
 
   // Guard movido AQUÍ (después de los hooks) para no violar las
@@ -1337,6 +1289,12 @@ export function Admin({ user, users, setUsers, svcs, setSvcs, prods, setProds, c
           // AGENDA
           tab==="agenda"&&ce("div",null,
             isAdmin&&ce(TrialBanner,null), ce(NotifBanner,null),
+            isAdmin&&overlaps.length>0&&ce("div",{style:{background:C.warn+"22",border:"1px solid "+C.warn,borderRadius:12,padding:"10px 13px",margin:"8px 0",fontSize:12}},
+              ce("b",{style:{color:C.warn,display:"block",marginBottom:4}},"⚠️ "+overlaps.length+" cruce(s) de citas por revisar"),
+              overlaps.slice(0,8).map(([a,b],i)=>{const st=users.find(u=>u.id===(a.stId||a.st_id));
+                return ce("div",{key:i,style:{color:C.text,marginTop:2}},a.date," · ",st?st.name:"?",": ",a.client," (",a.time,", ",a.dur||30,"min) ↔ ",b.client," (",b.time,")");}),
+              ce("div",{style:{color:C.muted,marginTop:4}},"No se movió ninguna cita. Reprograma manualmente y avisa al cliente.")
+            ),
             isAdmin&&ce("div",{style:{display:"flex",gap:4,marginBottom:8,overflowX:"auto"}},
               ce("button",{type:"button",onClick:()=>setSelSt(null),style:{...S.btn(selSt===null?"gold":"ghost"),padding:"4px 9px",fontSize:10,whiteSpace:"nowrap",color:selSt===null?"#000":C.muted}},"Todos"),
               staffL.map(u=>ce("button",{type:"button",key:u.id,onClick:()=>setSelSt(u.id),style:{...S.btn(selSt===u.id?"cyan":"ghost"),padding:"4px 9px",fontSize:10,whiteSpace:"nowrap",color:selSt===u.id?"#000":C.muted}},u.name.split(" ")[0]))
