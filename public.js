@@ -185,7 +185,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
       .map(a => ({
         start: pt(a.time),
         // Bloqueados: usar duración real o 15min mínimo para bloquear el slot
-        end: pt(a.time) + (a.dur || 15)
+        end: pt(a.time) + (a.dur || 30)
       }));
     if (lS!==null && lE!==null) busy.push({ start:lS, end:lE });
     busy.sort((a,b) => a.start-b.start);
@@ -195,7 +195,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
     let cursor = wS;
     if (ds === today()) {
       const now2 = new Date();
-      cursor = Math.max(cursor, now2.getHours()*60 + now2.getMinutes() + 1);
+      cursor = Math.max(cursor, Math.ceil((now2.getHours()*60 + now2.getMinutes() + 1) / 5) * 5);
     }
     for (const blk of busy) {
       // Slots continuos desde cursor hasta inicio del bloque
@@ -205,6 +205,7 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
         t += 5;
       }
       cursor = Math.max(cursor, blk.end);
+      cursor = Math.ceil(cursor / 5) * 5;
     }
     // Slots después del último bloque
     let t = cursor;
@@ -249,9 +250,14 @@ export function Public({ svcs, appts, users, clients, cfg, onBook, onAdmin, onSu
       // mismo horario mientras este completaba el formulario.
       let fresh;
       try { fresh = await DB.all("appointments"); } catch { fresh = liveAppts; }
-      const taken = fresh.some(x =>
-        (x.stId||x.st_id) === (stf?stf.id:null) && x.date === ts(dt) && x.time === tm && x.status !== "cancelado"
-      );
+      // Se compara por RANGO de tiempo (inicio–fin), no solo hora exacta:
+      // antes una cita a las 10:05 no chocaba con otra de 10:00–11:00.
+      const myS = pt(tm), myE = myS + (svc ? svc.dur : 30);
+      const taken = fresh.some(x => {
+        if ((x.stId||x.st_id) !== (stf?stf.id:null) || x.date !== ts(dt) || x.status === "cancelado") return false;
+        const xS = pt(x.time), xE = xS + (x.dur || 30);
+        return myS < xE && myE > xS;
+      });
       if (taken) {
         setLiveAppts(fresh);
         setErr("Ese horario se acaba de ocupar. Elige otro horario.");
